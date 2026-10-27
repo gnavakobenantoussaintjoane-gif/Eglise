@@ -53,6 +53,28 @@ const envSchema = z
     SUPABASE_STORAGE_BUCKET: z.string().default('media'),
     SUPABASE_PUBLIC_BUCKET: z.string().default('public-assets'),
 
+    // --- Messagerie -------------------------------------------------------
+    // 'smtp' : envoi reel par un serveur SMTP (n'importe quel fournisseur).
+    // 'log'  : les messages sont ecrits dans les journaux, jamais envoyes
+    //          (developpement, tests, demonstration).
+    // 'off'  : file d'attente alimentee mais aucun envoi automatique.
+    MAIL_DRIVER: z.enum(['smtp', 'log', 'off']).default('log'),
+    SMTP_HOST: optionalString,
+    SMTP_PORT: z.coerce.number().int().positive().default(587),
+    // true pour le port 465 (TLS implicite), false pour 587 (STARTTLS).
+    SMTP_SECURE: booleanish.default(false),
+    SMTP_USER: optionalString,
+    SMTP_PASSWORD: optionalString,
+    MAIL_FROM_ADDRESS: z.string().default('no-reply@laforteresse.local'),
+    MAIL_FROM_NAME: optionalString,
+    MAIL_REPLY_TO: optionalString,
+    // Expediteur automatique de la file : desactivable pour un traitement
+    // declenche manuellement (tests, environnements contraints).
+    MAIL_WORKER_ENABLED: booleanish.default(true),
+    MAIL_WORKER_INTERVAL_SECONDS: z.coerce.number().int().positive().default(60),
+    MAIL_BATCH_SIZE: z.coerce.number().int().positive().max(200).default(25),
+    MAIL_MAX_ATTEMPTS: z.coerce.number().int().positive().max(10).default(5),
+
     SESSION_SECRET: z.string().min(32, 'SESSION_SECRET doit contenir au moins 32 caracteres'),
     SESSION_TTL_HOURS: z.coerce.number().int().positive().default(168),
     COOKIE_NAME: z.string().default('lfe_session'),
@@ -74,6 +96,13 @@ const envSchema = z
         message:
           'DATABASE_URL est obligatoire en production. Le stockage PGlite local est reserve au developpement.',
         path: ['DATABASE_URL'],
+      });
+    }
+    if (value.MAIL_DRIVER === 'smtp' && !value.SMTP_HOST) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'SMTP_HOST est obligatoire lorsque MAIL_DRIVER=smtp.',
+        path: ['SMTP_HOST'],
       });
     }
     if (value.STORAGE_DRIVER === 'supabase') {

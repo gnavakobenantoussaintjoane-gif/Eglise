@@ -50,6 +50,7 @@ export function MemberProfilePage() {
         bio: values.bio || null,
         departmentInterestId: values.departmentInterestId || null,
         consentPhotos: values.consentPhotos,
+        emailOptOut: !values.receiveEmails,
       }),
     onSuccess: async () => {
       toast.success('Profil mis à jour.');

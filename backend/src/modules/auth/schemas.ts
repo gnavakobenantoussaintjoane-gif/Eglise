@@ -52,6 +52,8 @@ export const profileUpdateSchema = z.object({
   bio: z.string().trim().max(1500, 'Presentation trop longue (1500 caracteres max).').nullish(),
   departmentInterestId: z.string().uuid('Departement invalide.').nullish(),
   consentPhotos: z.boolean().optional(),
+  /** Preference pour les messages d'information (les e-mails transactionnels restent envoyes). */
+  emailOptOut: z.boolean().optional(),
 });
 
 export type RegisterInput = z.infer<typeof registerSchema>;

@@ -45,6 +45,9 @@ const AdminDashboardPage = lazy(() =>
 const AdminMembersPage = lazy(() =>
   import('../pages/admin/AdminMembersPage').then((module) => ({ default: module.AdminMembersPage })),
 );
+const AdminEmailsPage = lazy(() =>
+  import('../pages/admin/AdminEmailsPage').then((module) => ({ default: module.AdminEmailsPage })),
+);
 const AdminDepartmentsPage = lazy(() =>
   import('../pages/admin/AdminDepartmentsPage').then((module) => ({ default: module.AdminDepartmentsPage })),
 );
@@ -201,6 +204,14 @@ export function AppRoutes() {
           element={
             <Deferred>
               <AdminDepartmentsPage />
+            </Deferred>
+          }
+        />
+        <Route
+          path="messagerie"
+          element={
+            <Deferred>
+              <AdminEmailsPage />
             </Deferred>
           }
         />

@@ -5,6 +5,7 @@ import { AppError } from '../../utils/errors.js';
 import { createRandomToken, hashToken, signSessionToken } from '../../auth/tokens.js';
 import { findProfileById, supabaseAuthEnabled } from '../../middlewares/auth.js';
 import { notifyAdmins } from '../../services/notifications.js';
+import { sendPasswordResetEmail } from '../../services/email/index.js';
 import { recordAudit } from '../../middlewares/audit.js';
 import { mapProfileRow, type ProfileRow } from '../profiles/mapper.js';
 import type { AuthProfile } from '../../auth/permissions.js';
@@ -105,7 +106,8 @@ export const authService = {
          profession = case when $8::boolean then $9 else profession end,
          bio = case when $10::boolean then $11 else bio end,
          department_interest_id = case when $12::boolean then $13::uuid else department_interest_id end,
-         consent_photos = coalesce($14, consent_photos)
+         consent_photos = coalesce($14, consent_photos),
+         email_opt_out = coalesce($15, email_opt_out)
        where id = $1
        returning *`,
       [
@@ -123,6 +125,7 @@ export const authService = {
         input.departmentInterestId !== undefined,
         input.departmentInterestId ?? null,
         input.consentPhotos ?? null,
+        input.emailOptOut ?? null,
       ],
     );
 
@@ -234,7 +237,27 @@ export const authService = {
     });
 
     const resetUrl = `${env.FRONTEND_URL}/reinitialiser-mot-de-passe?token=${token}`;
-    // Sans fournisseur d'e-mail configure, le lien n'est expose qu'en dev/test.
+    const { rows: profileRows } = await db.query<{
+      email: string;
+      first_name: string | null;
+      last_name: string | null;
+    }>('select email, first_name, last_name from public.profiles where id = $1', [profile.id]);
+    const destinataire = profileRows[0];
+    if (destinataire) {
+      // Envoi reel du lien. Le message est transactionnel : il part meme si le
+      // membre a refuse les messages d'information.
+      await sendPasswordResetEmail(
+        db,
+        {
+          id: profile.id,
+          email: destinataire.email,
+          fullName: `${destinataire.first_name ?? ''} ${destinataire.last_name ?? ''}`.trim(),
+        },
+        resetUrl,
+      );
+    }
+    // Le lien n'est renvoye dans la reponse HTTP qu'en developpement/test :
+    // en production il ne circule que par e-mail.
     return isProduction && !isTest ? {} : { devResetUrl: resetUrl };
   },
 

@@ -9,6 +9,7 @@ import {
   House,
   Images,
   LayoutDashboard,
+  Mail,
   MessageSquareQuote,
   Quote,
   Settings,
@@ -34,6 +35,7 @@ const GROUPS: { title: string; items: { to: string; label: string; icon: typeof 
     items: [
       { to: '/admin/membres', label: 'Membres', icon: Users, adminOnly: true },
       { to: '/admin/departements', label: 'Départements', icon: ShieldCheck },
+      { to: '/admin/messagerie', label: 'Messagerie', icon: Mail, adminOnly: true },
     ],
   },
   {

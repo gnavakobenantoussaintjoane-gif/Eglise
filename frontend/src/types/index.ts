@@ -67,6 +67,8 @@ export interface Profile {
   status?: MemberStatus;
   role?: AppRole;
   consentPhotos?: boolean;
+  /** Le membre refuse les e-mails d'information (les messages de compte restent envoyés). */
+  emailOptOut?: boolean;
   submittedAt?: string | null;
   reviewedAt?: string | null;
   decisionNote?: string | null;
@@ -429,4 +431,42 @@ export interface ApiErrorShape {
     message: string;
     details?: { issues?: { path: string; message: string }[] } | unknown;
   };
+}
+
+/** État de la messagerie tel que renvoyé par l'API (jamais de secret). */
+export interface MailStatus {
+  config: {
+    driver: 'smtp' | 'log' | 'off' | 'memory';
+    configured: boolean;
+    fromAddress: string;
+    fromName: string | null;
+    replyTo: string | null;
+    host: string | null;
+    port: number | null;
+    workerEnabled: boolean;
+    warning: string | null;
+  };
+  outbox: { pending: number; sent: number; failed: number; lastError: string | null };
+}
+
+/** Campagne d'information envoyée à plusieurs membres. */
+export interface EmailCampaign {
+  id: string;
+  subject: string;
+  audience: 'approved' | 'all_members' | 'role' | 'department';
+  audienceDetail: string | null;
+  recipients: number;
+  sent: number;
+  failed: number;
+  pending: number;
+  createdByName: string | null;
+  createdAt: string;
+}
+
+export interface BroadcastResult {
+  campaignId: string;
+  recipients: number;
+  excluded: number;
+  sent: number;
+  failed: number;
 }
