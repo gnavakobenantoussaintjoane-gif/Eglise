@@ -1,0 +1,27 @@
+# Déploiement de l'interface seule (API hébergée séparément).
+# Netlify exécute la commande depuis la racine du dépôt pour réutiliser
+# package-lock.json (reproductibilité), puis publie le build du workspace.
+
+[build]
+  command = "npm ci && npm run build --workspace frontend"
+  publish = "frontend/dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+  NPM_FLAGS = "--no-audit --no-fund"
+
+# Application monopage : toute route inconnue est servie par index.html.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-store"

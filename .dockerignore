@@ -1,0 +1,30 @@
+# Dépendances et artefacts locaux : reconstruits dans l'image.
+node_modules
+**/node_modules
+
+# Builds
+backend/dist
+frontend/dist
+*.tsbuildinfo
+
+# Secrets et données locales
+.env
+.env.*
+backend/var
+var
+uploads
+
+# Outils et historique
+.git
+.github
+.vscode
+.idea
+coverage
+.vitest
+test-results
+docs
+
+# Divers
+*.log
+npm-debug.log*
+.DS_Store
