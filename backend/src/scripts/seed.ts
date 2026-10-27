@@ -225,16 +225,26 @@ async function seedDepartments(): Promise<Record<string, string>> {
   return ids;
 }
 
-async function seedUser(user: SeedUser, password: string | null): Promise<string> {
+/**
+ * Cree le compte de demonstration s'il n'existe pas.
+ *
+ * `created` indique si le mot de passe a effectivement ete applique : un compte
+ * deja present conserve le sien. Sans cette information, un second `db:seed`
+ * afficherait un mot de passe qui ne fonctionne pas.
+ */
+async function seedUser(
+  user: SeedUser,
+  password: string | null,
+): Promise<{ id: string; created: boolean }> {
   const db = getDatabase();
   const existing = await db.query<{ id: string }>(
     'select id from public.profiles where lower(email) = lower($1)',
     [user.email],
   );
-  if (existing.rows[0]) return existing.rows[0].id;
+  if (existing.rows[0]) return { id: existing.rows[0].id, created: false };
 
   const hash = password ? await hashPassword(password) : null;
-  return db.transaction(async (tx) => {
+  const id = await db.transaction(async (tx) => {
     const { rows } = await tx.query<{ id: string }>(
       `insert into auth.users (email, encrypted_password, email_confirmed_at, raw_user_meta_data)
        values ($1, $2, now(), $3) returning id`,
@@ -272,6 +282,7 @@ async function seedUser(user: SeedUser, password: string | null): Promise<string
     );
     return id;
   });
+  return { id, created: true };
 }
 
 async function seedAlbums(): Promise<void> {
@@ -737,8 +748,10 @@ async function main() {
       : randomBytes(12).toString('base64url');
   const exposePassword = !process.env.SEED_DEMO_PASSWORD;
 
+  let createdAccounts = 0;
   for (const user of DEMO_USERS) {
-    const id = await seedUser(user, demoPassword);
+    const { id, created } = await seedUser(user, demoPassword);
+    if (created) createdAccounts += 1;
     if (user.role === 'media') {
       const mediaId = departmentIds['communication-et-medias'];
       if (mediaId) {
@@ -755,13 +768,19 @@ async function main() {
   await seedAlbums();
 
   console.log('[seed] termine.');
-  console.log(`[seed] comptes de demonstration : *@${DEMO_EMAIL_DOMAIN} (${DEMO_USERS.length})`);
-  if (exposePassword) {
+  console.log(
+    `[seed] comptes de demonstration : *@${DEMO_EMAIL_DOMAIN} (${DEMO_USERS.length}, ${createdAccounts} cree(s))`,
+  );
+  if (createdAccounts > 0 && exposePassword) {
     console.log(`[seed] mot de passe commun des comptes de demonstration : ${demoPassword}`);
     console.log('[seed] ces comptes ne doivent exister qu en developpement.');
+  } else if (createdAccounts === 0) {
+    console.log(
+      '[seed] comptes deja presents : leurs mots de passe sont inchanges. Pour en definir un connu, utilisez SEED_DEMO_PASSWORD ou `npm run db:reset`.',
+    );
   }
   console.log(
-    '[seed] administrateur : lancez `npm run create-admin -- <email> <mot-de-passe>` (aucun admin par defaut).',
+    '[seed] administrateur : aucun compte admin par defaut. Lancez `npm run init-super-admin -- --email <adresse>` (mot de passe saisi a l invite masquee).',
   );
 
   await closeDatabase();
