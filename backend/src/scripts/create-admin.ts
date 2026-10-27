@@ -1,104 +1,100 @@
 import { env, isProduction } from '../config/env.js';
 import { closeDatabase, getDatabase } from '../db/client.js';
 import { runMigrations } from '../db/migrate.js';
-import { hashPassword, passwordIssues } from '../auth/password.js';
-import { recordAudit } from '../middlewares/audit.js';
+import { passwordIssues } from '../auth/password.js';
+import { BootstrapError, initSuperAdmin, normalizeEmail } from '../auth/bootstrap.js';
+import { askHidden, requireInteractive } from '../utils/prompt.js';
 
 /**
- * Initialisation securisee du premier administrateur.
- * Aucun identifiant par defaut : l'e-mail et le mot de passe viennent de
- * l'environnement (ou des arguments CLI).
+ * Creation (ou promotion) d'un administrateur.
+ *
+ * Historique : ce script acceptait le mot de passe en second argument. Cela le
+ * rendait visible dans l'historique du shell et la liste des processus. Le mot
+ * de passe est desormais demande a l'invite, avec echo masque.
+ *
+ * Pour le compte principal de l'eglise, preferez `npm run init-super-admin`,
+ * qui applique les garde-fous d'initialisation (pas de second administrateur
+ * implicite, pas de doublon).
  */
 async function main() {
   const db = getDatabase();
   await runMigrations({ silent: true });
 
-  const email = (process.argv[2] ?? env.ADMIN_BOOTSTRAP_EMAIL ?? '').trim().toLowerCase();
-  const password = process.argv[3] ?? env.ADMIN_BOOTSTRAP_PASSWORD ?? '';
-  const firstName = env.ADMIN_BOOTSTRAP_FIRST_NAME || 'Administrateur';
-  const lastName = env.ADMIN_BOOTSTRAP_LAST_NAME || 'Principal';
-
-  if (!email || !password) {
+  const email = normalizeEmail(process.argv[2] ?? env.ADMIN_BOOTSTRAP_EMAIL ?? '');
+  if (!email) {
     console.error(
       [
-        'Usage : npm run create-admin -- <email> <mot-de-passe>',
-        '   ou : renseignez ADMIN_BOOTSTRAP_EMAIL et ADMIN_BOOTSTRAP_PASSWORD dans backend/.env',
+        'Usage : npm run create-admin -- <email>',
+        '   ou : renseignez ADMIN_BOOTSTRAP_EMAIL dans backend/.env',
         '',
-        'Le mot de passe doit contenir au moins 10 caracteres, une lettre et un chiffre.',
+        'Le mot de passe vous sera demande de facon masquee.',
+        'Pour le compte principal, utilisez plutot : npm run init-super-admin -- --email <adresse>',
       ].join('\n'),
     );
     process.exit(1);
   }
 
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-    console.error('Adresse e-mail invalide.');
-    process.exit(1);
+  if (process.argv[3]) {
+    console.error(
+      [
+        'Le mot de passe ne doit pas etre passe en argument (il resterait dans',
+        "l'historique du shell et dans la liste des processus).",
+        'Relancez la commande sans mot de passe : il vous sera demande de facon masquee.',
+      ].join('\n'),
+    );
+    process.exit(2);
+  }
+
+  requireInteractive('create-admin');
+
+  // Compatibilite : la variable ADMIN_BOOTSTRAP_PASSWORD reste acceptee pour les
+  // environnements automatises, mais elle est signalee comme un risque.
+  let password = env.ADMIN_BOOTSTRAP_PASSWORD ?? '';
+  if (password) {
+    console.warn(
+      '[create-admin] ADMIN_BOOTSTRAP_PASSWORD est defini dans l environnement : preferez la saisie masquee et supprimez cette variable.',
+    );
+  } else {
+    password = await askHidden('Mot de passe : ');
+    const confirmation = await askHidden('Confirmez le mot de passe : ');
+    if (password !== confirmation) {
+      console.error('[create-admin] les deux saisies ne correspondent pas.');
+      process.exit(1);
+    }
   }
 
   const issues = passwordIssues(password);
   if (issues.length > 0) {
-    console.error(`Mot de passe trop faible : il manque ${issues.join(', ')}.`);
+    console.error(`[create-admin] mot de passe trop faible : il manque ${issues.join(', ')}.`);
     process.exit(1);
   }
 
-  const existing = await db.query<{ id: string; role: string }>(
-    'select id, role from public.profiles where lower(email) = $1 limit 1',
-    [email],
-  );
-
-  if (existing.rows[0]) {
-    const profileId = existing.rows[0].id;
-    await db.query(
-      `update public.profiles set role = 'admin', status = 'approved', reviewed_at = now()
-       where id = $1`,
-      [profileId],
-    );
-    await db.query(
-      `insert into public.membership_history (profile_id, status, note)
-       values ($1, 'approved', 'Promotion administrateur via create-admin')`,
-      [profileId],
-    );
-    await recordAudit(db, {
-      actorEmail: email,
-      action: 'admin.bootstrap_existing',
-      entityType: 'profile',
-      entityId: profileId,
+  try {
+    const result = await initSuperAdmin(db, {
+      email,
+      password,
+      firstName: env.ADMIN_BOOTSTRAP_FIRST_NAME,
+      lastName: env.ADMIN_BOOTSTRAP_LAST_NAME,
+      promote: true,
+      // `create-admin` reste l'outil d'ajout d'administrateur explicite.
+      allowAdditionalAdmin: true,
     });
-    console.log(`[create-admin] compte existant promu administrateur : ${email}`);
-    await closeDatabase();
-    return;
+    const labels = {
+      created: 'administrateur cree',
+      promoted: 'compte existant promu administrateur',
+      password_updated: 'mot de passe mis a jour',
+      already_admin: 'compte deja administrateur',
+    } as const;
+    console.log(`[create-admin] ${labels[result.action]} : ${result.email}`);
+  } catch (error) {
+    if (error instanceof BootstrapError) {
+      console.error(`[create-admin] ${error.message}`);
+      if (error.hint) console.error(`[create-admin] ${error.hint}`);
+    } else {
+      throw error;
+    }
   }
 
-  const passwordHash = await hashPassword(password);
-  const profileId = await db.transaction(async (tx) => {
-    const { rows } = await tx.query<{ id: string }>(
-      `insert into auth.users (email, encrypted_password, email_confirmed_at, raw_user_meta_data)
-       values ($1, $2, now(), $3) returning id`,
-      [email, passwordHash, JSON.stringify({ first_name: firstName, last_name: lastName })],
-    );
-    const id = rows[0].id;
-    await tx.query(
-      `insert into public.profiles (id, email, first_name, last_name, status, role, reviewed_at)
-       values ($1, $2, $3, $4, 'approved', 'admin', now())`,
-      [id, email, firstName, lastName],
-    );
-    await tx.query(
-      `insert into public.membership_history (profile_id, status, note)
-       values ($1, 'approved', 'Initialisation du premier administrateur')`,
-      [id],
-    );
-    return id;
-  });
-
-  await recordAudit(db, {
-    actorId: profileId,
-    actorEmail: email,
-    action: 'admin.bootstrap',
-    entityType: 'profile',
-    entityId: profileId,
-  });
-
-  console.log(`[create-admin] administrateur cree : ${email}`);
   if (isProduction) {
     console.log(
       '[create-admin] Pensez a supprimer ADMIN_BOOTSTRAP_PASSWORD de votre environnement.',

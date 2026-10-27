@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { getDatabase } from '../../db/client.js';
 import { hashPassword, verifyPassword } from '../../auth/password.js';
 import { signSessionToken } from '../../auth/tokens.js';
@@ -27,18 +28,20 @@ export const localProvider = {
     }
 
     const passwordHash = await hashPassword(input.password);
+    // L'identifiant est genere ici : sur Supabase, `auth.users.id` n'a pas de
+    // valeur par defaut (contrairement au schema local de developpement).
+    const userId = randomUUID();
     const profile = await db.transaction(async (tx) => {
-      const { rows: users } = await tx.query<{ id: string }>(
-        `insert into auth.users (email, encrypted_password, email_confirmed_at, raw_user_meta_data)
-         values ($1, $2, now(), $3)
-         returning id`,
+      await tx.query(
+        `insert into auth.users (id, email, encrypted_password, email_confirmed_at, raw_user_meta_data)
+         values ($1, $2, $3, now(), $4)`,
         [
+          userId,
           input.email,
           passwordHash,
           JSON.stringify({ first_name: input.firstName, last_name: input.lastName }),
         ],
       );
-      const userId = users[0].id;
       const { rows: profiles } = await tx.query<ProfileRow>(
         `insert into public.profiles (id, email, first_name, last_name, phone, city, status)
          values ($1, $2, $3, $4, $5, $6, 'profile_incomplete')

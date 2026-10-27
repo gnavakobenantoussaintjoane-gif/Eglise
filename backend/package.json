@@ -16,7 +16,8 @@
     "db:migrate": "tsx src/scripts/migrate.ts",
     "db:seed": "tsx src/scripts/seed.ts",
     "db:reset": "tsx src/scripts/reset.ts",
-    "create-admin": "tsx src/scripts/create-admin.ts"
+    "create-admin": "tsx src/scripts/create-admin.ts",
+    "init-super-admin": "tsx src/scripts/init-super-admin.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.12",
