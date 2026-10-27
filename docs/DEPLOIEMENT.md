@@ -80,6 +80,42 @@ DATABASE_URL="postgresql://…" npm run db:migrate
 
 `0001_init.sql` a déjà été appliqué par `db:migrate` ; `0002` et `0003` sont idempotents.
 
+### 3.1 bis — Projet Supabase dédié (production de l'application)
+
+L'application dispose de **son propre projet Supabase**, isolé de tout autre projet :
+
+| | |
+|---|---|
+| Nom | `Eglise` |
+| Référence (ref) | `abjlyscebvaxbdojmplk` |
+| Région | `eu-west-1` (Irlande) |
+| PostgreSQL | 17.11 |
+| Auth Supabase | **non utilisée** — l'application gère ses propres comptes |
+| Buckets | `media` (privé), `public-assets` (public) |
+
+Migrations appliquées sur ce projet, dans l'ordre :
+
+| Version | Nom | Contenu |
+|---|---|---|
+| 20261027144104 | `0001_init` | 21 tables, types énumérés, index, triggers `updated_at`, garde-fou des privilèges de profil |
+| 20261027144134 | `0002_rls` | RLS activée sur 21 tables, 60 politiques, 5 fonctions d'autorisation, privilèges par rôle |
+| 20261027144144 | `0003_storage` | 2 buckets + 6 politiques de stockage |
+| 20261027144152 | `0004_local_auth_profiles` | `profiles` indépendante de `auth.users` + lien facultatif `auth_user_id` |
+| 20261027144247 | `0005_security_hardening` | révocation des privilèges `anon` sur les 10 tables sensibles |
+
+> ⚠️ **Ne renseignez jamais `SUPABASE_ANON_KEY`** tant que vous conservez l'authentification de l'application : cette seule variable bascule `supabaseAuthEnabled()` sur `true` et délègue tout le parcours de connexion à Supabase Auth. Pour Storage, seuls `SUPABASE_URL` et `SUPABASE_SERVICE_ROLE_KEY` sont nécessaires.
+
+Configuration attendue dans `backend/.env` (valeurs à récupérer dans le tableau de bord Supabase) :
+
+```bash
+DATABASE_URL="postgresql://postgres.<ref>:<mot-de-passe>@aws-0-eu-west-1.pooler.supabase.com:6543/postgres"
+STORAGE_DRIVER=supabase
+SUPABASE_URL="https://abjlyscebvaxbdojmplk.supabase.co"
+SUPABASE_SERVICE_ROLE_KEY="<clé service_role>"
+SUPABASE_ANON_KEY=            # LAISSER VIDE
+COOKIE_SECURE=true
+```
+
 **PostgreSQL managé (Neon, Railway, RDS…)** : même principe, `DATABASE_URL` puis `npm run db:migrate`. Ne pas activer `0002_rls.sql` si l'application se connecte avec un rôle propriétaire qui contourne la RLS — les politiques sont prévues pour l'accès direct via Supabase.
 
 ### 3.2 Stockage des fichiers
