@@ -1,7 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-// Import statique : la configuration (et son eventuel message de chargement
-// d'environnement) est lue avant l'installation des espions.
 import { logger } from '../src/utils/logger.js';
+
+// La configuration reelle n'est pas necessaire ici et dependrait d'un
+// `backend/.env` absent en integration continue : on la remplace par un double
+// minimal. `isTest` reste vrai, comme dans la suite de tests.
+vi.mock('../src/config/env.js', () => ({
+  env: { LOG_LEVEL: 'info' },
+  isTest: true,
+  isProduction: false,
+}));
 
 /**
  * Verifie que `LOG_LEVEL` a un effet reel.
