@@ -1,2 +1,452 @@
-# Eglise
-APPLICATION WEB « LA FORTERESSE DE L’ÉTERNEL »
+# La Forteresse de l'Éternel
+
+Application web complète pour l'église évangélique **La Forteresse de l'Éternel** (Abidjan, Côte d'Ivoire) : site vitrine public, espace membre avec parcours d'adhésion, espace média et back-office d'administration.
+
+Le dépôt contient une **API REST** (Node/Express + TypeScript) et une **interface React**, dans un monorepo npm. Le schéma de base de données est fourni en migrations SQL prêtes pour PostgreSQL/Supabase, avec une base locale **PGlite** intégrée pour développer sans rien installer.
+
+```bash
+npm install
+cp backend/.env.example backend/.env   # renseigner SESSION_SECRET
+npm run db:migrate && npm run db:seed && npm run create-admin
+npm run dev                            # API :4000 · site :5173
+```
+
+---
+
+## Sommaire
+
+- [Fonctionnalités](#fonctionnalités)
+- [Stack technique](#stack-technique)
+- [Structure du dépôt](#structure-du-dépôt)
+- [Prérequis](#prérequis)
+- [Installation](#installation)
+- [Variables d'environnement](#variables-denvironnement)
+- [Base de données](#base-de-données)
+- [Scripts disponibles](#scripts-disponibles)
+- [Comptes de démonstration](#comptes-de-démonstration)
+- [Routes du site](#routes-du-site)
+- [API](#api)
+- [Rôles et permissions](#rôles-et-permissions)
+- [Sécurité et vie privée](#sécurité-et-vie-privée)
+- [Tests et vérifications](#tests-et-vérifications)
+- [Déploiement](#déploiement)
+- [Dépannage](#dépannage)
+
+---
+
+## Fonctionnalités
+
+### Site public
+
+| Page | Route | Contenu |
+|---|---|---|
+| Accueil | `/` | Hero, horaires de culte, prochaines prédications et événements, départements, appel à l'action |
+| À propos | `/a-propos` | Histoire, vision, mission, valeurs, équipe |
+| Prédications | `/predications` | Liste filtrable par série et recherche, page de détail avec lecteur vidéo/audio |
+| Événements | `/evenements` | À venir / passés, fiche détaillée, **inscription en ligne** (nom, e-mail, places) |
+| Départements | `/departements` | Présentation des équipes, fiche détaillée, demande d'adhésion |
+| Galerie | `/galerie` | Albums publics, albums réservés aux membres, lightbox clavier, **signalement de retrait** (droit à l'image) |
+| Annonces | `/annonces` | Annonces publiques, épinglées en tête |
+| Témoignages | `/temoignages` | Témoignages validés ; dépôt réservé aux membres connectés |
+| Prière | `/priere` | Formulaire de demande de prière (confidentiel) |
+| Contact | `/contact` | Coordonnées, horaires, plan Google Maps, WhatsApp, réseaux sociaux |
+| Confidentialité | `/confidentialite` | Politique de confidentialité et de traitement des données |
+
+### Espace membre
+
+Nécessite un compte **approuvé** par un administrateur.
+
+- **Parcours d'adhésion** (`/mon-inscription`) : complétion du profil, envoi de la demande, suivi de l'historique des décisions (profil incomplet → en attente → approuvé / refusé / suspendu).
+- **Tableau de bord** : prochains événements, annonces, notifications, état de l'adhésion.
+- **Profil** : informations personnelles, photo (upload), changement de mot de passe.
+- **Départements** : consulter les équipes, envoyer une demande d'adhésion, annuler une demande en attente.
+- **Annonces** et **notifications** internes (marquage lu / tout marquer comme lu).
+- **Galerie privée** : albums réservés aux membres et aux personnes autorisées.
+- **Événements** : inscription aux rendez-vous de l'église.
+- **Témoignages** : rédaction et suivi de modération.
+
+### Espace média (`/media`)
+
+Réservé aux administrateurs et à l'équipe média : création d'albums, upload de photos, gestion des autorisations d'accès photo par photo, publication, archivage et téléchargement d'un album en ZIP.
+
+### Administration (`/admin`)
+
+| Module | Fonctions |
+|---|---|
+| Tableau de bord | Indicateurs (membres, départements, albums, prédications, événements, finances) |
+| Membres | Liste filtrable, fiche détaillée, approbation / refus / suspension, changement de rôle, historique |
+| Départements | CRUD, responsable, membres, demandes d'adhésion, archivage, image |
+| Galerie | Albums, photos, accès restreints, publication |
+| Prédications | CRUD, série, référence biblique, média, publication |
+| Événements | CRUD, couverture, inscriptions, export CSV |
+| Annonces | CRUD, audience, épinglage, expiration |
+| Prière | Boîte de réception des demandes, statut, notes |
+| Modération | Témoignages (approbation/refus) et signalements de retrait |
+| Finances | Contributions, dépenses, résumé |
+| Paramètres | Identité de l'église, couleurs, horaires de culte, réseaux sociaux, logo, hero |
+| Journal | Journal d'audit filtrable (action, entité, acteur) |
+
+Les écrans d'administration sont **chargés en différé** : un visiteur du site public ne télécharge pas le back-office.
+
+---
+
+## Stack technique
+
+**Backend**
+
+- Node.js ≥ 20.19 · TypeScript 5.9 · Express 4
+- Validation **Zod 4**, erreurs normalisées (`code`, `message`, `details.issues`)
+- **pg** (PostgreSQL) et **@electric-sql/pglite** (base embarquée) derrière un adaptateur unique
+- Sessions : cookie signé (**jose**), mots de passe hachés en **scrypt** (`node:crypto`)
+- **helmet**, **cors**, `express-rate-limit`, **multer** (upload), **archiver** (ZIP d'album)
+- Stockage fichiers : disque local avec **URLs signées** expirant en 15 min, ou **Supabase Storage**
+- Tests d'intégration **Vitest + supertest** sur une base réelle
+
+**Frontend**
+
+- React 19 · Vite 7 · TypeScript
+- **Tailwind CSS 4** (tokens `@theme`), composants maison accessibles
+- **TanStack Query 5** (cache, invalidation), **React Router 7**
+- **React Hook Form + Zod** (formulaires), **Sonner** (notifications), **Motion**, **lucide-react**, **date-fns** (locale `fr`)
+- Tests **Vitest + Testing Library** (jsdom)
+
+---
+
+## Structure du dépôt
+
+```text
+.
+├── backend/                  API REST
+│   ├── src/
+│   │   ├── auth/             sessions, hachage, permissions (RBAC)
+│   │   ├── config/           chargement et validation des variables d'env
+│   │   ├── db/               adaptateur pg / PGlite, helpers de requêtes
+│   │   ├── middlewares/      auth, erreurs, validation, rate limit, upload
+│   │   ├── modules/          auth, profiles, settings, departments, gallery,
+│   │   │                     content, files, public, members, admin
+│   │   ├── scripts/          migrate, seed, reset, create-admin
+│   │   ├── services/         fichiers, notifications, vues profil
+│   │   ├── storage/          pilotes local et Supabase
+│   │   └── app.ts, server.ts
+│   ├── tests/api.test.ts     17 tests d'intégration
+│   └── .env.example
+├── frontend/                 interface React
+│   └── src/
+│       ├── components/       ui/, layout/, public/, members/, auth/, admin/
+│       ├── hooks/            useAuth, useChurchSettings
+│       ├── layouts/          Public, Member, Admin
+│       ├── pages/            public/, auth/, members/, admin/
+│       ├── routes/           AppRoutes + guards (RequireAuth/Approved/Admin/Media/Staff)
+│       ├── services/         client API typé
+│       ├── styles/           Tailwind 4 + thème
+│       ├── types/            contrats de l'API
+│       └── utils/            formatage FR, cn
+├── supabase/
+│   ├── migrations/
+│   │   ├── 0001_init.sql     schéma complet
+│   │   ├── 0002_rls.sql      politiques Row Level Security
+│   │   └── 0003_storage.sql  buckets de stockage
+│   └── local/01_auth_stub.sql  schéma `auth` minimal pour PGlite
+└── package.json              workspaces npm + scripts racine
+```
+
+Volumes : ~53 fichiers / 8 800 lignes côté API, ~71 fichiers / 12 200 lignes côté interface, 4 fichiers SQL.
+
+---
+
+## Prérequis
+
+| Outil | Version |
+|---|---|
+| Node.js | ≥ 20.19 |
+| npm | ≥ 10 |
+| PostgreSQL | facultatif — seulement en production ou pour utiliser une base existante |
+
+Aucun serveur de base de données n'est nécessaire en développement : **PGlite** embarque PostgreSQL dans le processus Node, avec persistance dans `backend/var/pglite`.
+
+---
+
+## Installation
+
+```bash
+# 1. Dépendances (monorepo : backend + frontend)
+npm install
+
+# 2. Configuration
+cp backend/.env.example backend/.env
+node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"   # → SESSION_SECRET
+# éditer backend/.env : SESSION_SECRET, ADMIN_BOOTSTRAP_*, SEED_DEMO_DATA, SEED_DEMO_PASSWORD
+
+# 3. Base de données
+npm run db:migrate      # applique supabase/migrations
+npm run db:seed         # jeu de démonstration (si SEED_DEMO_DATA=true)
+npm run create-admin    # premier administrateur (ADMIN_BOOTSTRAP_*)
+# ou, sans variables d'environnement :
+npm run create-admin -- admin@exemple.ci "MotDePasse2026!"
+
+# 4. Démarrage (API + interface en parallèle)
+npm run dev
+```
+
+| Service | URL |
+|---|---|
+| Site | http://localhost:5173 |
+| API | http://localhost:4000/api/v1 |
+| Contrôle de santé | http://localhost:4000/api/v1/health → `{"status":"ok","database":"pglite","storage":"local"}` |
+
+Le serveur de développement Vite **proxifie `/api` et `/files`** vers l'API : aucun réglage CORS n'est nécessaire, les cookies restent de première partie. Pour pointer ailleurs : `VITE_API_PROXY=http://localhost:4000 npm run dev:frontend`.
+
+> `npm run dev` lance les deux processus avec `concurrently`. Pour les piloter séparément : `npm run dev:backend` et `npm run dev:frontend`.
+
+---
+
+## Variables d'environnement
+
+Fichier de référence : [`backend/.env.example`](backend/.env.example). Il est chargé depuis `backend/.env` (les variables déjà définies dans l'environnement ont priorité).
+
+### Général
+
+| Variable | Défaut | Description |
+|---|---|---|
+| `NODE_ENV` | `development` | `development` \| `test` \| `production` |
+| `PORT` | `4000` | Port d'écoute de l'API |
+| `API_PREFIX` | `/api/v1` | Préfixe de toutes les routes |
+| `FRONTEND_URL` | `http://localhost:5173` | Origine autorisée par défaut (CORS) |
+| `CORS_ORIGINS` | — | Origines supplémentaires, séparées par des virgules |
+| `PUBLIC_API_URL` | *(vide)* | URL publique de l'API pour les liens signés. **Vide = liens relatifs** (recommandé derrière un proxy) |
+| `MAX_UPLOAD_MB` | `25` | Taille maximale d'un fichier uploadé |
+| `LOG_LEVEL` | `info` | `debug` \| `info` \| `warn` \| `error` |
+
+### Base de données
+
+| Variable | Défaut | Description |
+|---|---|---|
+| `DATABASE_URL` | *(vide)* | Chaîne PostgreSQL. **Vide = PGlite local.** Obligatoire en production |
+| `PGLITE_DATA_DIR` | `./var/pglite` | Dossier de persistance PGlite |
+| `AUTO_MIGRATE` | `true` | Applique les migrations au démarrage |
+| `DB_POOL_MAX` | `10` | Taille du pool PostgreSQL |
+
+### Stockage
+
+| Variable | Défaut | Description |
+|---|---|---|
+| `STORAGE_DRIVER` | `local` | `local` (URLs signées par l'API) ou `supabase` |
+| `STORAGE_LOCAL_DIR` | `./var/uploads` | Dossier des fichiers en local |
+| `SUPABASE_URL` | — | Requis si `STORAGE_DRIVER=supabase` |
+| `SUPABASE_SERVICE_ROLE_KEY` | — | Requis si `STORAGE_DRIVER=supabase` |
+| `SUPABASE_ANON_KEY`, `SUPABASE_JWT_SECRET` | — | Facultatifs selon le mode d'accès |
+| `SUPABASE_STORAGE_BUCKET` | `media` | Bucket privé (URLs signées) |
+| `SUPABASE_PUBLIC_BUCKET` | `public-assets` | Bucket public (logo, couvertures) |
+
+### Session
+
+| Variable | Défaut | Description |
+|---|---|---|
+| `SESSION_SECRET` | — | **Obligatoire, ≥ 32 caractères.** Clé de signature des cookies |
+| `SESSION_TTL_HOURS` | `168` | Durée de vie de la session (7 jours) |
+| `COOKIE_NAME` | `lfe_session` | Nom du cookie |
+| `COOKIE_SECURE` | `false` | **`true` derrière HTTPS** |
+
+### Amorçage et données de démonstration
+
+| Variable | Défaut | Description |
+|---|---|---|
+| `ADMIN_BOOTSTRAP_EMAIL` / `ADMIN_BOOTSTRAP_PASSWORD` | — | Utilisées uniquement par `npm run create-admin` |
+| `ADMIN_BOOTSTRAP_FIRST_NAME` / `..._LAST_NAME` | `Administrateur` / `Principal` | Nom du premier admin |
+| `SEED_DEMO_DATA` | `false` | Active `npm run db:seed` sans `--force` |
+| `SEED_DEMO_PASSWORD` | *(aléatoire)* | Mot de passe commun des comptes de démo (≥ 10 caractères). S'il est absent, un mot de passe aléatoire est généré et affiché par le script |
+
+---
+
+## Base de données
+
+### Deux modes, un seul code
+
+L'adaptateur `backend/src/db/client.ts` expose la même API (`query`, `exec`, transactions) au-dessus de `pg` ou de PGlite :
+
+- **Développement / démonstration** : `DATABASE_URL` vide → PostgreSQL embarqué (PGlite), données dans `backend/var/pglite`, aucun service à lancer.
+- **Production / Supabase** : `DATABASE_URL` renseignée → pool `pg` classique.
+
+Schéma appliqué par les migrations versionnées dans `supabase/migrations`, plus un *stub* `auth` (`supabase/local/01_auth_stub.sql`) pour reproduire localement le schéma géré par Supabase Auth.
+
+> Détails d'implémentation utiles : PGlite exige `exec()` pour les scripts multi-instructions, ne fournit pas `pgcrypto`, demande un cast explicite des paramètres d'énumération (`$1::public.<enum>`) et ne retourne le nombre de lignes affectées que via `affectedRows`.
+
+### Migrations
+
+| Fichier | Contenu |
+|---|---|
+| `0001_init.sql` | Profils, adhésion et historique, départements et membres, galerie (albums, photos, accès), prédications, événements et inscriptions, annonces, témoignages, demandes de prière, finances, notifications, journal d'audit |
+| `0002_rls.sql` | Row Level Security : cloisonnement des données par rôle |
+| `0003_storage.sql` | Buckets Supabase (privé / public) et politiques associées |
+
+```bash
+npm run db:migrate                 # applique les migrations manquantes
+npm run db:seed -- --force         # injecte le jeu de démonstration
+npm run db:reset                   # repart de zéro (destructif)
+```
+
+### Cycle de vie d'une adhésion
+
+```text
+inscription  →  profile_incomplete  →  pending_review  →  approved
+                        ↑                    ↓
+                    rejected  ───────────────┘
+                                         suspended
+```
+
+Chaque transition est enregistrée dans `membership_history` (auteur, note, date) et notifiée au membre.
+
+---
+
+## Scripts disponibles
+
+Depuis la racine (ils délèguent au bon workspace) :
+
+| Commande | Effet |
+|---|---|
+| `npm run dev` | API + interface en parallèle |
+| `npm run dev:backend` / `npm run dev:frontend` | Un seul service |
+| `npm run build` | Compile l'API (`dist/`) puis construit le frontend |
+| `npm start` | Démarre l'API compilée |
+| `npm run typecheck` | `tsc --noEmit` sur les deux workspaces |
+| `npm run test` | Suites backend puis frontend |
+| `npm run db:migrate` | Applique les migrations |
+| `npm run db:seed` | Jeu de démonstration (`-- --force` pour ignorer `SEED_DEMO_DATA`) |
+| `npm run db:reset` | Réinitialise la base |
+| `npm run create-admin` | Crée le premier administrateur |
+
+Côté `frontend` : `npm run dev --workspace frontend`, `npm run build --workspace frontend`, `npm run test --workspace frontend`.
+
+---
+
+## Comptes de démonstration
+
+Créés par `npm run db:seed` avec `SEED_DEMO_DATA=true` et le mot de passe défini dans `SEED_DEMO_PASSWORD` :
+
+| Compte | Rôle | Statut |
+|---|---|---|
+| `marie.kouassi@demo.laforteresse.test` | Membre | Approuvé |
+| `jean.yao@demo.laforteresse.test` | Responsable de département | Approuvé |
+| `esther.diallo@demo.laforteresse.test` | Équipe média | Approuvé |
+| `paul.adjoumani@demo.laforteresse.test` | Membre | En attente |
+| `grace.bamba@demo.laforteresse.test` | Membre | En attente |
+| `samuel.kone@demo.laforteresse.test` | Membre | Profil incomplet |
+| `ruth.assamoi@demo.laforteresse.test` | Membre | Refusé |
+| `daniel.ouattara@demo.laforteresse.test` | Membre | Suspendu |
+
+L'administrateur n'est **jamais** créé par le seed : `npm run create-admin` utilise `ADMIN_BOOTSTRAP_EMAIL` / `ADMIN_BOOTSTRAP_PASSWORD`, ou les arguments de la ligne de commande (prioritaires). Le mot de passe doit contenir **au moins 10 caractères, une lettre et un chiffre** ; si le compte existe déjà, il est promu administrateur et approuvé.
+
+Le jeu de démonstration comprend aussi 10 départements, 3 prédications, 3 événements avec inscriptions, 4 albums (15 photos) et des annonces, témoignages et demandes de prière.
+
+---
+
+## Routes du site
+
+| Public | Espace membre (`/espace-membre`) | Autres |
+|---|---|---|
+| `/` | `/` tableau de bord | `/connexion` |
+| `/a-propos` | `/profil` | `/inscription` |
+| `/predications`, `/predications/:slug` | `/departements` | `/mot-de-passe-oublie` |
+| `/evenements`, `/evenements/:slug` | `/annonces` | `/reinitialiser-mot-de-passe` |
+| `/departements`, `/departements/:slug` | `/notifications` | `/mon-inscription` (onboarding) |
+| `/galerie`, `/galerie/:slug` | `/galerie` | `/media`, `/media/galerie` (équipe média) |
+| `/annonces`, `/temoignages`, `/priere` | `/evenements` | `/departements/gestion` (responsables) |
+| `/contact`, `/confidentialite` | `/temoignages` | `/admin/*` (administration) |
+
+Les accès sont contrôlés côté client par `RequireAuth`, `RequireApproved`, `RequireAdmin`, `RequireMedia` et `RequireStaff` — et **systématiquement revérifiés côté serveur**.
+
+---
+
+## API
+
+Base : `/api/v1`. Réponses JSON ; erreurs au format `{ "error": { "code", "message", "details" } }`. Authentification par cookie de session `httpOnly`.
+
+| Préfixe | Accès | Contenu |
+|---|---|---|
+| `/health` | public | État du service, du mode base et du stockage |
+| `/auth` | mixte | `register`, `login`, `logout`, `refresh`, `session`, `profile` (PATCH), `profile/submit`, `avatar`, `password`, `forgot-password`, `reset-password`, `me/history` |
+| `/public` | public | `settings`, `departments[/:slug]`, `sermons[/:slug]`, `events[/:slug]`, `events/:slug/register`, `announcements`, `albums[/:slug]`, `testimonies`, `prayer-requests`, `gallery/takedown-requests` |
+| `/members` | membre approuvé | `dashboard`, `announcements`, `albums[/:slug]`, `events`, `events/:slug/register`, `departments`, `departments/:id/requests`, `departments/requests[/:id]`, `notifications`, `notifications/unread-count`, `notifications/:id/read`, `notifications/read-all`, `directory`, `testimonies`, `testimonies/mine`, `prayer-requests/mine`, `audit/mine` |
+| `/media` | admin ou média | Albums : `albums`, `albums/:id`, `albums/:id/photos`, `photos/:id`, `albums/:id/access[/:profileId]`, `albums/:id/publish`, `albums/:id/archive`, `albums/:id/download` |
+| `/admin` | admin (staff pour les départements) | `/dashboard`, `/members/*`, `/departments/*`, `/sermons/*`, `/events/*` (+ `registrations`, `export`), `/announcements/*`, `/prayer-requests/*`, `/testimonies/*`, `/takedown-requests/*`, `/finance/{contributions,expenses,summary}`, `/settings/*`, `/audit-logs` |
+| `/files/:token` | signé | Sert un fichier via une URL signée à durée limitée (900 s) |
+
+Les listes paginées renvoient `{ <ressource>, pagination: { page, perPage, total, totalPages } }`, avec le nom de la ressource comme clé (`sermons`, `events`, `albums`, `testimonies`, `logs`, `items`…).
+
+**Validation** — une requête invalide renvoie `422 VALIDATION_ERROR` avec le détail par champ dans `details.issues`, que le frontend mappe directement sur les formulaires.
+
+---
+
+## Rôles et permissions
+
+| Rôle | Accès |
+|---|---|
+| `member` (approuvé) | Espace membre : profil, départements, annonces, notifications, galerie membres, événements, témoignages |
+| `department_leader` | Idem + gestion des départements dont il est responsable (`/admin/departments`, `/departements/gestion`), demandes d'adhésion et membres de ces départements |
+| `media` | Idem + gestion complète de la galerie (`/media`) |
+| `admin` | Accès total au back-office, y compris finances, paramètres et journal d'audit |
+
+Les permissions calculées sont exposées par la session (`isAdmin`, `isMedia`, `canAccessMembersArea`, `canManageGallery`, `canManageDepartments`) et réutilisées par l'interface pour masquer les actions non autorisées — sans jamais remplacer le contrôle serveur.
+
+---
+
+## Sécurité et vie privée
+
+- Mots de passe hachés en **scrypt** avec sel aléatoire et comparaison à temps constant.
+- Session par cookie `httpOnly` + `sameSite`, `secure` activable par `COOKIE_SECURE=true`.
+- **helmet** (en-têtes de sécurité), **CORS** restreint aux origines configurées, garde d'origine sur les requêtes sensibles.
+- **Rate limiting** : global (600 req/15 min en production), authentification (20/15 min), écritures publiques (20/h), uploads (120/h) — clé par utilisateur authentifié, IP sinon.
+- **Validation Zod** systématique côté serveur (corps, query, paramètres), tailles d'upload limitées.
+- **Fichiers** : jamais exposés en direct ; liens signés expirant en 900 s.
+- **Vie privée** : l'annuaire des membres n'expose ni e-mail ni téléphone ni statut ; le formulaire de prière est confidentiel ; la galerie permet à toute personne représentée de demander un retrait.
+- **Row Level Security** activée dans `0002_rls.sql` pour un déploiement Supabase.
+- **Journal d'audit** de toutes les actions administratives (acteur, action, entité, métadonnées).
+
+---
+
+## Tests et vérifications
+
+```bash
+npm run typecheck                        # backend + frontend
+npm run test                             # 17 tests API + 30 tests interface
+```
+
+| Contrôle | Résultat |
+|---|---|
+| `tsc --noEmit` backend + frontend | ✅ aucune erreur |
+| Tests API (Vitest + supertest) | ✅ **17/17** |
+| Tests interface (Vitest + Testing Library) | ✅ **30/30** |
+| `npm run build --workspace frontend` | ✅ build de production |
+
+- **API** (`backend/tests/api.test.ts`) : parcours d'authentification, contrôle d'accès par rôle, validation, CRUD d'administration, finances et téléchargements — exécutés sur une vraie base.
+- **Interface** : composants (`ui.test.tsx`), formatage FR (`format.test.ts`), routes (`AppRoutes.test.tsx`) et **fumée de toutes les routes publiques** plus des zones protégées (`routes.smoke.test.tsx`).
+
+---
+
+## Déploiement
+
+1. **Base** — créer un projet Supabase (ou un PostgreSQL managé) et renseigner `DATABASE_URL`. Appliquer les migrations (`npm run db:migrate`, ou via la CLI Supabase) et `0002_rls.sql` + `0003_storage.sql`.
+2. **Stockage** — `STORAGE_DRIVER=supabase`, avec `SUPABASE_URL` et `SUPABASE_SERVICE_ROLE_KEY`. Sinon, monter un volume persistant sur `STORAGE_LOCAL_DIR`.
+3. **API** — `npm run build` puis `npm start` (`NODE_ENV=production`, `DATABASE_URL` obligatoire, `COOKIE_SECURE=true` derrière HTTPS, `CORS_ORIGINS` et `FRONTEND_URL` sur le domaine réel). `AUTO_MIGRATE` peut être désactivé au profit des migrations versionnées.
+4. **Frontend** — `npm run build --workspace frontend` produit `frontend/dist` à servir en statique, avec réécriture SPA vers `index.html`. Si l'API n'est pas sur le même domaine, définir `VITE_API_URL` ; sinon laisser la valeur par défaut `/api/v1` et proxyfier `/api` et `/files` vers l'API.
+5. **Premier administrateur** — `npm run create-admin` avec `ADMIN_BOOTSTRAP_*`, puis **retirer ces variables** de l'environnement.
+
+Ne jamais committer `backend/.env` ni `backend/var/` : ils contiennent les secrets, la base locale et les fichiers uploadés (déjà couverts par `.gitignore`).
+
+---
+
+## Dépannage
+
+| Symptôme | Cause / solution |
+|---|---|
+| `SESSION_SECRET doit contenir au moins 32 caracteres` | Générer une valeur : `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"` |
+| `DATABASE_URL est obligatoire en production` | Le stockage PGlite est réservé au développement ; renseigner `DATABASE_URL` |
+| Le site s'affiche mais les appels API échouent | L'API n'est pas démarrée sur le port 4000, ou `VITE_API_PROXY` pointe ailleurs |
+| La connexion ne « prend » pas | Cookie `secure` activé sans HTTPS, ou `FRONTEND_URL` / `CORS_ORIGINS` différents de l'origine réelle |
+| Base dans un état incohérent en développement | `npm run db:reset` puis `npm run db:migrate && npm run db:seed` |
+| `Cannot find module` après un `git clone` | `npm install` n'a pas été lancé à la racine (workspaces) |
+| Uploads refusés | Vérifier `MAX_UPLOAD_MB` et la limite par type de fichier |
+
+---
+
+Application de l'église évangélique **La Forteresse de l'Éternel** — Abidjan, Côte d'Ivoire.
