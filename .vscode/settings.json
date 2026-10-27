@@ -1,0 +1,21 @@
+{
+  // Utiliser le TypeScript installe par le projet (et non celui de VS Code) :
+  // les diagnostics correspondent alors a `npm run typecheck`, sans avertissement
+  // de version ni resolution de modules hasardeuse.
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "typescript.disableAutomaticTypeAcquisition": true,
+
+  // Les dependances ne sont pas versionnees : les masquer de la recherche
+  // garde les resultats utiles sans les exclure de la resolution TypeScript.
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/var": true,
+    "package-lock.json": true
+  },
+  "files.eol": "\n",
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "editor.tabSize": 2
+}
