@@ -14,7 +14,7 @@ export default defineConfig({
   },
   server: {
     host: '0.0.0.0',
-    port: 5173,
+    port: 3000,
     strictPort: true,
     // Autorise les hotes de previsualisation (proxy Arena *.e2b.app)
     allowedHosts: true,
@@ -25,7 +25,7 @@ export default defineConfig({
   },
   preview: {
     host: '0.0.0.0',
-    port: 4173,
+    port: 3000,
     allowedHosts: true,
   },
   build: {

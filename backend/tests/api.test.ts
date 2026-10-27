@@ -217,3 +217,192 @@ describe('API - administration', () => {
     expect(res.body.logs.some((log: { action: string }) => log.action === 'finance.contribution.delete')).toBe(true);
   });
 });
+
+/**
+ * Permissions sensibles exigees par le cahier des charges :
+ *  - un utilisateur ne peut ni s'approuver lui-meme, ni s'attribuer un role ;
+ *  - un responsable de departement ne peut pas devenir administrateur ;
+ *  - un membre non approuve n'accede pas a l'espace membre ;
+ *  - une nomination conserve son historique apres la fin de la fonction.
+ */
+describe('API - permissions sensibles et historique des nominations', () => {
+  const CHEF = {
+    firstName: 'Serge',
+    lastName: 'Bamba',
+    email: 'chef.departement@test.local',
+    password: 'ChefDepartement2026!',
+  };
+  const CANDIDAT = {
+    firstName: 'Nadia',
+    lastName: 'Kone',
+    email: 'candidat.non.approuve@test.local',
+    password: 'Candidat2026!',
+  };
+
+  let chefAgent: ReturnType<typeof request.agent>;
+  let chefId = '';
+  let candidatAgent: ReturnType<typeof request.agent>;
+  let departmentId = '';
+
+  /** Cree un compte complet, soumet la demande puis approuve directement en base. */
+  async function createApprovedProfile(
+    account: { firstName: string; lastName: string; email: string; password: string },
+    agent: ReturnType<typeof request.agent>,
+  ) {
+    await agent.post(`${API}/auth/register`).send(account).expect(201);
+    await agent
+      .patch(`${API}/auth/profile`)
+      .send({ city: 'Abidjan', phone: '+225 07 00 00 00 01', profession: 'Benevole' })
+      .expect(200);
+    await agent.post(`${API}/auth/profile/submit`).expect(200);
+    await approveProfile(account.email);
+    await agent.post(`${API}/auth/login`).send({ email: account.email, password: account.password }).expect(200);
+    const { getDatabase } = await import('../src/db/client.js');
+    const { rows } = await getDatabase().query<{ id: string }>(
+      'select id from public.profiles where email = $1',
+      [account.email],
+    );
+    return rows[0]?.id ?? '';
+  }
+
+  beforeAll(async () => {
+    chefAgent = request.agent(app);
+    candidatAgent = request.agent(app);
+
+    chefId = await createApprovedProfile(CHEF, chefAgent);
+    // Le responsable recoit le role `department_leader`, jamais `admin`.
+    await adminAgent
+      .patch(`${API}/admin/members/${chefId}/role`)
+      .send({ role: 'department_leader' })
+      .expect(200);
+
+    // Candidat inscrive : sa demande reste en attente de validation.
+    await candidatAgent.post(`${API}/auth/register`).send(CANDIDAT).expect(201);
+    await candidatAgent
+      .patch(`${API}/auth/profile`)
+      .send({ city: 'Abidjan', phone: '+225 07 00 00 00 02', profession: 'Etudiante' })
+      .expect(200);
+    await candidatAgent.post(`${API}/auth/profile/submit`).expect(200);
+  }, 60_000);
+
+  it('empeche un membre non approuve d entrer dans l espace membre', async () => {
+    await candidatAgent.get(`${API}/members/dashboard`).expect(403);
+  });
+
+  it('empeche un utilisateur de s approuver lui-meme', async () => {
+    const { getDatabase } = await import('../src/db/client.js');
+    const { rows } = await getDatabase().query<{ id: string }>(
+      'select id from public.profiles where email = $1',
+      [CANDIDAT.email],
+    );
+    const candidatId = rows[0]?.id;
+    expect(candidatId).toBeTruthy();
+
+    // Un membre non approuve n'a aucun acces aux routes d'administration.
+    await candidatAgent
+      .patch(`${API}/admin/members/${candidatId}/status`)
+      .send({ status: 'approved' })
+      .expect(403);
+
+    // Un administrateur ne peut pas valider sa propre fiche non plus.
+    const self = await adminAgent.get(`${API}/auth/session`).expect(200);
+    await adminAgent
+      .patch(`${API}/admin/members/${self.body.profile.id}/status`)
+      .send({ status: 'approved' })
+      .expect(403);
+  });
+
+  it('empeche un responsable de devenir administrateur', async () => {
+    const res = await chefAgent
+      .patch(`${API}/admin/members/${chefId}/role`)
+      .send({ role: 'admin' })
+      .expect(403);
+    expect(res.body.error.code).toBeTruthy();
+
+    // Le role effectif n'a pas bouge.
+    const session = await chefAgent.get(`${API}/auth/session`).expect(200);
+    expect(session.body.profile.role).toBe('department_leader');
+    expect(session.body.permissions.isAdmin).toBe(false);
+  });
+
+  it('enregistre une nomination avec date de debut et historique', async () => {
+    const department = await adminAgent
+      .post(`${API}/admin/departments`)
+      .send({ name: 'Cellule de test', description: 'Departement cree par les tests.' })
+      .expect(201);
+    departmentId = department.body.id;
+    expect(departmentId).toBeTruthy();
+
+    await adminAgent
+      .post(`${API}/admin/departments/${departmentId}/members`)
+      .send({
+        profileId: chefId,
+        role: 'leader',
+        functionTitle: 'Responsable de cellule',
+        startedOn: '2026-01-05',
+      })
+      .expect(201);
+
+    const members = await adminAgent
+      .get(`${API}/admin/departments/${departmentId}/members`)
+      .expect(200);
+    const membre = members.body.members.find((entry: { profileId: string }) => entry.profileId === chefId);
+    expect(membre.functionTitle).toBe('Responsable de cellule');
+    expect(membre.startedOn).toBe('2026-01-05');
+
+    const history = await adminAgent
+      .get(`${API}/admin/departments/${departmentId}/nominations`)
+      .expect(200);
+    expect(history.body.nominations).toHaveLength(1);
+    expect(history.body.nominations[0]).toMatchObject({
+      profileId: chefId,
+      memberRole: 'leader',
+      status: 'active',
+      startedOn: '2026-01-05',
+      endedOn: null,
+    });
+
+    // Le nombre de responsables actifs remonte dans le tableau de bord.
+    const dashboard = await adminAgent.get(`${API}/admin/dashboard`).expect(200);
+    expect(dashboard.body.departments.leadersActive).toBeGreaterThanOrEqual(1);
+  });
+
+  it('conserve l historique apres la fin de la fonction', async () => {
+    await adminAgent
+      .delete(`${API}/admin/departments/${departmentId}/members/${chefId}`)
+      .expect(200);
+
+    const history = await adminAgent
+      .get(`${API}/admin/departments/${departmentId}/nominations`)
+      .expect(200);
+    expect(history.body.nominations).toHaveLength(1);
+    expect(history.body.nominations[0].status).toBe('ended');
+    expect(history.body.nominations[0].endedOn).toBeTruthy();
+
+    const byMember = await adminAgent.get(`${API}/admin/members/${chefId}/nominations`).expect(200);
+    expect(byMember.body.nominations).toHaveLength(1);
+  });
+
+  it('cloture les fonctions en cours quand un departement est archive', async () => {
+    // Nouvelle nomination, puis archivage : l'historique doit rester consultable.
+    await adminAgent
+      .post(`${API}/admin/departments/${departmentId}/members`)
+      .send({ profileId: chefId, role: 'assistant', startedOn: '2026-03-01' })
+      .expect(201);
+
+    await adminAgent.post(`${API}/admin/departments/${departmentId}/archive`).expect(200);
+
+    const history = await adminAgent
+      .get(`${API}/admin/departments/${departmentId}/nominations`)
+      .expect(200);
+    const active = history.body.nominations.filter(
+      (entry: { status: string }) => entry.status === 'active',
+    );
+    expect(active).toHaveLength(0);
+    expect(
+      history.body.nominations.some(
+        (entry: { endReason: string | null }) => entry.endReason === 'Departement archive',
+      ),
+    ).toBe(true);
+  });
+});

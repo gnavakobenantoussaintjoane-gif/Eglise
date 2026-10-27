@@ -30,7 +30,7 @@ FROM node:22-bookworm-slim AS runtime
 
 WORKDIR /app
 ENV NODE_ENV=production \
-    PORT=4000 \
+    PORT=3000 \
     API_PREFIX=/api/v1 \
     PGLITE_DATA_DIR=/data/pglite \
     STORAGE_LOCAL_DIR=/data/uploads
@@ -48,11 +48,11 @@ VOLUME ["/data"]
 
 USER node
 
-EXPOSE 4000
+EXPOSE 3000
 
 # `fetch` est disponible nativement à partir de Node 18 : pas de curl dans
 # l'image slim.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||4000)+(process.env.API_PREFIX||'/api/v1')+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+(process.env.API_PREFIX||'/api/v1')+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 CMD ["node", "backend/dist/server.js"]

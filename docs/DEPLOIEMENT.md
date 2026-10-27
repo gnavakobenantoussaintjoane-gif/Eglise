@@ -180,7 +180,7 @@ docker build -t la-forteresse .
 
 # 2. Lancer le service
 docker run -d --name la-forteresse \
-  -p 4000:4000 \
+  -p 3000:3000 \
   -e NODE_ENV=production \
   -e DATABASE_URL="postgresql://…" \
   -e SESSION_SECRET="$(node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))")" \
@@ -193,7 +193,7 @@ docker run -d --name la-forteresse \
   la-forteresse
 
 # 3. Vérifier
-curl -fsS http://localhost:4000/api/v1/health
+curl -fsS http://localhost:3000/api/v1/health
 ```
 
 L'image :
@@ -216,7 +216,7 @@ services:
     volumes:
       - donnees:/data
     ports:
-      - "127.0.0.1:4000:4000"
+      - "127.0.0.1:3000:3000"
 
 volumes:
   donnees:

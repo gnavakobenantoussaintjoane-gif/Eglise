@@ -111,7 +111,28 @@ export interface DepartmentMember {
   city: string | null;
   role: string;
   status: string;
+  /** Début de la période d'exercice en cours (AAAA-MM-JJ). */
+  startedOn: string | null;
+  /** Intitulé libre de la fonction (« Responsable louange »…). */
+  functionTitle: string | null;
   joinedAt: string;
+}
+
+/** Ligne d'historique des nominations d'un département. */
+export interface DepartmentNomination {
+  id: string;
+  departmentId: string | null;
+  departmentName: string;
+  profileId: string;
+  fullName: string;
+  memberRole: string;
+  functionTitle: string | null;
+  startedOn: string;
+  endedOn: string | null;
+  status: 'active' | 'ended';
+  endReason: string | null;
+  appointedByName: string | null;
+  createdAt: string;
 }
 
 export interface DepartmentRequest {
@@ -370,7 +391,7 @@ export interface AdminDashboard {
     suspended: number;
     incomplete: number;
   };
-  departments: { active: number };
+  departments: { active: number; leadersActive: number };
   albums: { total: number; published: number; photos: number };
   sermons: { published: number };
   events: { upcoming: number };

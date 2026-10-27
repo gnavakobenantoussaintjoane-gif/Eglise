@@ -31,6 +31,13 @@ import {
   updateDepartment,
 } from '../departments/service.js';
 import {
+  closeNomination,
+  openNomination,
+  listDepartmentNominations,
+  listProfileNominations,
+} from '../departments/nominations.js';
+import { nominationInputSchema, nominationEndSchema } from '../departments/nominations-schemas.js';
+import {
   createSermon,
   deleteSermon,
   listSermons,
@@ -270,18 +277,12 @@ adminRouter.get(
 adminRouter.post(
   '/departments/:id/members',
   requireStaff,
-  validate({
-    params: uuidParams,
-    body: z.object({
-      profileId: z.string().uuid(),
-      role: z.enum(['leader', 'assistant', 'member']).default('member'),
-    }),
-  }),
+  validate({ params: uuidParams, body: nominationInputSchema }),
   asyncHandler(async (req, res) => {
     const { profile } = authContext(req);
     const { id } = paramsOf<{ id: string }>(req);
     await assertDepartmentScope(profile, id);
-    const input = bodyOf<{ profileId: string; role: 'leader' | 'assistant' | 'member' }>(req);
+    const input = bodyOf<z.infer<typeof nominationInputSchema>>(req);
     const db = getDatabase();
 
     const member = await db.query<{ status: string }>(
@@ -289,16 +290,35 @@ adminRouter.post(
       [input.profileId],
     );
     if (!member.rows[0]) throw AppError.notFound('Membre introuvable.');
+    // Regle metier : seuls les membres approuves peuvent exercer une fonction.
     if (member.rows[0].status !== 'approved') {
       throw AppError.badRequest("Seul un membre approuve peut rejoindre un departement.");
     }
 
+    // Affectation courante : une seule ligne par (departement, membre).
     await db.query(
-      `insert into public.department_members (department_id, profile_id, member_role, status)
-       values ($1,$2,$3,'active')
+      `insert into public.department_members
+         (department_id, profile_id, member_role, status, started_on, ended_on, function_title)
+       values ($1, $2, $3, 'active', coalesce($4::date, current_date), null, $5)
        on conflict (department_id, profile_id)
-       do update set member_role = excluded.member_role, status = 'active'`,
-      [id, input.profileId, input.role],
+       do update set member_role = excluded.member_role,
+                     status = 'active',
+                     ended_on = null,
+                     function_title = excluded.function_title,
+                     started_on = coalesce(excluded.started_on, current_date)`,
+      [id, input.profileId, input.role, input.startedOn ?? null, input.functionTitle ?? null],
+    );
+
+    // Historique : la nomination ouverte est tracee separement.
+    await openNomination(
+      {
+        departmentId: id,
+        profileId: input.profileId,
+        memberRole: input.role,
+        functionTitle: input.functionTitle ?? null,
+        startedOn: input.startedOn ?? null,
+      },
+      profile,
     );
 
     await notifyProfiles(db, [input.profileId], {
@@ -322,16 +342,29 @@ adminRouter.post(
 adminRouter.delete(
   '/departments/:id/members/:profileId',
   requireStaff,
-  validate({ params: z.object({ id: z.string().uuid(), profileId: z.string().uuid() }) }),
+  validate({
+    params: z.object({ id: z.string().uuid(), profileId: z.string().uuid() }),
+    // Corps facultatif : le motif de fin de fonction peut etre precise.
+    body: nominationEndSchema,
+  }),
   asyncHandler(async (req, res) => {
     const { profile } = authContext(req);
     const { id, profileId } = paramsOf<{ id: string; profileId: string }>(req);
+    const { reason } = bodyOf<{ reason?: string }>(req);
     await assertDepartmentScope(profile, id);
     const db = getDatabase();
+    // L'affectation courante est cloturee mais conservee : les controles
+    // d'acces ne considerent que `status = 'active'`.
     await db.query(
-      `update public.department_members set status = 'left'
-       where department_id = $1 and profile_id = $2`,
+      `update public.department_members
+          set status = 'left', ended_on = coalesce(ended_on, current_date)
+        where department_id = $1 and profile_id = $2`,
       [id, profileId],
+    );
+    // Historique : cloture de la nomination correspondante.
+    await closeNomination(
+      { departmentId: id, profileId, reason: reason ?? 'Fin de fonction' },
+      profile,
     );
     await recordAudit(db, {
       actorId: profile.id,
@@ -339,9 +372,32 @@ adminRouter.delete(
       action: 'department.member.remove',
       entityType: 'department',
       entityId: id,
-      metadata: { profileId },
+      metadata: { profileId, reason: reason ?? null },
     });
     res.json({ ok: true });
+  }),
+);
+
+// Historique des nominations d'un departement (dates et motifs conserves).
+adminRouter.get(
+  '/departments/:id/nominations',
+  requireStaff,
+  validate({ params: uuidParams }),
+  asyncHandler(async (req, res) => {
+    const { id } = paramsOf<{ id: string }>(req);
+    await assertDepartmentScope(authContext(req).profile, id);
+    res.json({ nominations: await listDepartmentNominations(id) });
+  }),
+);
+
+// Historique des fonctions exercees par un membre, tous departements confondus.
+adminRouter.get(
+  '/members/:id/nominations',
+  requireAdmin,
+  validate({ params: uuidParams }),
+  asyncHandler(async (req, res) => {
+    const { id } = paramsOf<{ id: string }>(req);
+    res.json({ nominations: await listProfileNominations(id) });
   }),
 );
 

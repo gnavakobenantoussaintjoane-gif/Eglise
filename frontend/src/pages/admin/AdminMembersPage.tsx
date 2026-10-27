@@ -4,7 +4,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Search, ShieldCheck, ShieldX, UserCheck, UserX, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ApiError } from '../../services/api';
-import type { MemberDetail, MemberListItem, MemberStatus, Pagination } from '../../types';
+import type {
+  DepartmentNomination,
+  MemberDetail,
+  MemberListItem,
+  MemberStatus,
+  Pagination,
+} from '../../types';
 import {
   Alert,
   Avatar,
@@ -22,6 +28,7 @@ import {
   MEMBER_STATUS_LABEL,
   MEMBER_STATUS_TONE,
   ROLE_LABEL,
+  formatDateRange,
   formatDateTime,
   formatRelative,
 } from '../../utils/format';
@@ -311,6 +318,11 @@ function MemberDetailModal({
           </div>
 
           <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-ink">Fonctions dans les départements</h3>
+            <MemberNominations profileId={detail.id} />
+          </div>
+
+          <div className="space-y-2">
             <h3 className="text-sm font-semibold text-ink">Historique des décisions</h3>
             {detail.history.length === 0 ? (
               <p className="text-sm text-muted">Aucune décision enregistrée.</p>
@@ -406,5 +418,52 @@ function MemberDetailModal({
         </div>
       )}
     </Modal>
+  );
+}
+
+/**
+ * Historique des nominations d'un membre (fonction, dates, motif de fin).
+ * La requete n'est lancee qu'a l'ouverture d'une fiche pour ne pas alourdir la
+ * liste des membres.
+ */
+function MemberNominations({ profileId }: { profileId: string }) {
+  const nominationsQuery = useQuery({
+    queryKey: ['admin', 'member-nominations', profileId],
+    queryFn: ({ signal }) =>
+      api.get<{ nominations: DepartmentNomination[] }>(
+        `/admin/members/${profileId}/nominations`,
+        undefined,
+        signal,
+      ),
+  });
+
+  if (nominationsQuery.isLoading) return <p className="text-sm text-muted">Chargement…</p>;
+  const nominations = nominationsQuery.data?.nominations ?? [];
+  if (nominations.length === 0) {
+    return <p className="text-sm text-muted">Aucune fonction enregistrée.</p>;
+  }
+
+  return (
+    <ul className="space-y-2">
+      {nominations.map((nomination) => (
+        <li key={nomination.id} className="rounded-lg border border-line px-3 py-2 text-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium text-ink">{nomination.departmentName}</span>
+            <Badge tone="neutral">
+              {nomination.functionTitle || nomination.memberRole}
+            </Badge>
+            {nomination.status === 'active' ? (
+              <Badge tone="success">En fonction</Badge>
+            ) : (
+              <Badge tone="neutral">Terminée</Badge>
+            )}
+          </div>
+          <p className="mt-1 text-xs text-muted">
+            {formatDateRange(nomination.startedOn, nomination.endedOn)}
+            {nomination.endReason ? ` · ${nomination.endReason}` : ''}
+          </p>
+        </li>
+      ))}
+    </ul>
   );
 }
