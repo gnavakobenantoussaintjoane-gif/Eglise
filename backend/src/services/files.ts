@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { getStorage } from '../storage/index.js';
 import type { ValidatedFile } from '../middlewares/upload.js';
 import { safeFileSegment } from '../middlewares/upload.js';
+import { logger } from '../utils/logger.js';
 
 export interface StoredUpload {
   path: string;
@@ -37,7 +38,7 @@ export async function removeStoredFile(storagePath: string | null | undefined): 
   try {
     await getStorage().remove(storagePath);
   } catch (error) {
-    console.error('[storage] suppression impossible', storagePath, error);
+    logger.error(`[storage] suppression impossible pour ${storagePath}`, error);
   }
 }
 
@@ -49,7 +50,7 @@ export async function signedFileUrl(
   try {
     return await getStorage().signedUrl(storagePath, { ttlSeconds });
   } catch (error) {
-    console.error('[storage] URL signee impossible', storagePath, error);
+    logger.error(`[storage] URL signee impossible pour ${storagePath}`, error);
     return null;
   }
 }

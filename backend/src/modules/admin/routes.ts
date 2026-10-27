@@ -986,7 +986,7 @@ adminRouter.post(
   validate({ body: broadcastSchema.pick({ subject: true, body: true }) }),
   asyncHandler(async (req, res) => {
     const input = bodyOf<{ subject: string; body: string }>(req);
-    res.json(await previewBroadcast(input));
+    res.json(await previewBroadcast({ ...input, profileId: authContext(req).profile.id }));
   }),
 );
 

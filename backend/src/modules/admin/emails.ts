@@ -33,6 +33,10 @@ import { AppError } from '../../utils/errors.js';
 export const broadcastSchema = z.object({
   subject: z.string().trim().min(3, 'Objet trop court.').max(160, 'Objet trop long.'),
   body: z.string().trim().min(10, 'Message trop court.').max(8000, 'Message trop long.'),
+  // `all_members` est un alias historique de `approved` : il ne visait deja que
+  // les membres approuves (on n'ecrit jamais aux demandes en attente). Il reste
+  // accepte pour ne pas casser les integrations existantes, mais l'interface ne
+  // le propose plus : le libelle laissait croire a un envoi plus large.
   audience: z.enum(['approved', 'all_members', 'role', 'department']).default('approved'),
   role: z.enum(['member', 'department_leader', 'media', 'admin']).optional(),
   departmentId: z.string().uuid().optional(),
@@ -89,8 +93,8 @@ async function resolveRecipients(input: BroadcastInput): Promise<{
     )`);
   }
 
-  // `all_members` et `approved` visent les membres approuves ; les demandes non
-  // approuvees ne recoivent jamais de message d'information.
+  // Toutes les audiences ne visent que des membres approuves : une demande en
+  // attente ou refusee ne recoit jamais de message d'information.
   const baseWhere = where.join(' and ');
 
   const { rows } = await db.query<Recipient>(
@@ -311,13 +315,19 @@ export async function previewBroadcast(input: {
   subject: string;
   body: string;
   fullName?: string;
+  /**
+   * Profil servant a signer le lien de desinscription de l'apercu. On utilise
+   * celui de l'administrateur qui demande l'apercu : le lien affiche est donc
+   * un vrai lien, testable, et non un exemple inerte.
+   */
+  profileId?: string;
 }) {
   const brand = brandingFrom(await getSettingsRow());
   const rendered = broadcastEmail(brand, {
     fullName: input.fullName ?? 'Awa Traoré',
     subject: input.subject,
     body: input.body,
-    unsubscribeUrl: unsubscribeUrl('apercu'),
+    unsubscribeUrl: unsubscribeUrl(input.profileId ?? null),
   });
   return { subject: rendered.subject, html: rendered.html, text: rendered.text };
 }

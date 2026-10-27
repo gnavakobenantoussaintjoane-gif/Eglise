@@ -28,6 +28,7 @@ import {
   type AlbumInput,
 } from './albums-service.js';
 import { recordAudit } from '../../middlewares/audit.js';
+import { logger } from '../../utils/logger.js';
 
 export const mediaRouter = Router();
 
@@ -247,7 +248,7 @@ mediaRouter.get(
 
     const archive = archiver('zip', { zlib: { level: 6 } });
     archive.on('error', (error) => {
-      console.error('[zip] erreur', error);
+      logger.error('[zip] erreur', error);
       res.destroy(error);
     });
     archive.pipe(res);
@@ -267,7 +268,7 @@ mediaRouter.get(
         const name = path.file_name.replace(/[^\w.\-]+/g, '-');
         archive.append(data, { name: `${String(index + 1).padStart(3, '0')}-${name}` });
       } catch (error) {
-        console.error('[zip] fichier ignore', path.storage_path, error);
+        logger.error(`[zip] fichier ignore : ${path.storage_path}`, error);
       }
     }
 

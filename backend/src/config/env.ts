@@ -49,7 +49,6 @@ const envSchema = z
     SUPABASE_URL: optionalString,
     SUPABASE_ANON_KEY: optionalString,
     SUPABASE_SERVICE_ROLE_KEY: optionalString,
-    SUPABASE_JWT_SECRET: optionalString,
     SUPABASE_STORAGE_BUCKET: z.string().default('media'),
     SUPABASE_PUBLIC_BUCKET: z.string().default('public-assets'),
 

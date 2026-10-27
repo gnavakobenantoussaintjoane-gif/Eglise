@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getDatabase } from '../db/client.js';
 import { repoRoot } from '../config/env.js';
+import { logger } from '../utils/logger.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const migrationsDir = path.resolve(here, '../../../supabase/migrations');
@@ -52,15 +53,15 @@ export async function runMigrations(options: MigrateOptions = {}): Promise<strin
         await tx.query('insert into public.schema_migrations (version) values ($1)', [file]);
       });
       applied.push(file);
-      if (!options.silent) console.log(`[migrations] applique : ${file}`);
+      if (!options.silent) logger.info(`[migrations] applique : ${file}`);
     } catch (error) {
-      console.error(`[migrations] echec sur ${file}`, error);
+      logger.error(`[migrations] echec sur ${file}`, error);
       throw error;
     }
   }
 
   if (!options.silent && applied.length === 0) {
-    console.log('[migrations] base deja a jour.');
+    logger.info('[migrations] base deja a jour.');
   }
 
   return applied;
@@ -70,7 +71,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   runMigrations()
     .then(() => process.exit(0))
     .catch((error) => {
-      console.error(error);
+      logger.error(error);
       process.exit(1);
     });
 }

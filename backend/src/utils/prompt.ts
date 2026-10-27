@@ -1,4 +1,5 @@
 import readline from 'node:readline';
+import { logger } from '../utils/logger.js';
 
 /**
  * Saisie interactive au terminal.
@@ -52,7 +53,7 @@ export function askHidden(prompt: string): Promise<string> {
 /** Refuse de continuer si le terminal n'est pas interactif (pipe, CI). */
 export function requireInteractive(scriptName: string): void {
   if (!isInteractive()) {
-    console.error(
+    logger.error(
       [
         `[${scriptName}] Terminal interactif requis.`,
         'Le mot de passe doit etre saisi a la main pour ne jamais transiter par un',

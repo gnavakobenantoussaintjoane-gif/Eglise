@@ -12,7 +12,8 @@ Le dépôt contient une **API REST** (Node/Express + TypeScript) et une **interf
 ```bash
 npm install
 cp backend/.env.example backend/.env   # renseigner SESSION_SECRET
-npm run db:migrate && npm run db:seed && npm run create-admin
+npm run db:migrate && npm run db:seed
+npm run init-super-admin -- --email vous@exemple.ci   # compte principal (mot de passe saisi masqué)
 npm run dev                            # site :3000 · API :4000 (proxifiée)
 ```
 
@@ -137,7 +138,7 @@ Les écrans d'administration sont **chargés en différé** : un visiteur du sit
 │   │   ├── middlewares/      auth, erreurs, validation, rate limit, upload
 │   │   ├── modules/          auth, profiles, settings, departments, gallery,
 │   │   │                     content, files, public, members, admin
-│   │   ├── scripts/          migrate, seed, reset, create-admin
+│   │   ├── scripts/          migrate, seed, reset, create-admin, init-super-admin
 │   │   ├── services/         fichiers, notifications, vues profil
 │   │   ├── storage/          pilotes local et Supabase
 │   │   └── app.ts, server.ts
@@ -193,9 +194,9 @@ node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"  
 # 3. Base de données
 npm run db:migrate      # applique supabase/migrations
 npm run db:seed         # jeu de démonstration (si SEED_DEMO_DATA=true)
-npm run create-admin    # premier administrateur (ADMIN_BOOTSTRAP_*)
-# ou, sans variables d'environnement :
-npm run create-admin -- admin@exemple.ci "MotDePasse2026!"
+npm run init-super-admin -- --email vous@exemple.ci   # compte principal (pasteur)
+# le mot de passe est demandé à l'invite masquée : il ne doit jamais être
+# passé en argument (il resterait dans l'historique du shell)
 
 # 4. Démarrage (API + interface en parallèle)
 npm run dev
@@ -228,7 +229,7 @@ Fichier de référence : [`backend/.env.example`](backend/.env.example). Il est 
 | `CORS_ORIGINS` | — | Origines supplémentaires, séparées par des virgules |
 | `PUBLIC_API_URL` | *(vide)* | URL publique de l'API pour les liens signés. **Vide = liens relatifs** (recommandé derrière un proxy) |
 | `MAX_UPLOAD_MB` | `25` | Taille maximale d'un fichier uploadé |
-| `LOG_LEVEL` | `info` | `debug` \| `info` \| `warn` \| `error` |
+| `LOG_LEVEL` | `info` | Seuil de la journalisation du serveur : `debug` \| `info` \| `warn` \| `error` (les messages de niveau inférieur sont ignorés ; en test, seules les erreurs sortent) |
 
 ### Base de données
 
@@ -247,7 +248,7 @@ Fichier de référence : [`backend/.env.example`](backend/.env.example). Il est 
 | `STORAGE_LOCAL_DIR` | `./var/uploads` | Dossier des fichiers en local |
 | `SUPABASE_URL` | — | Requis si `STORAGE_DRIVER=supabase` |
 | `SUPABASE_SERVICE_ROLE_KEY` | — | Requis si `STORAGE_DRIVER=supabase` |
-| `SUPABASE_ANON_KEY`, `SUPABASE_JWT_SECRET` | — | Facultatifs selon le mode d'accès |
+| `SUPABASE_ANON_KEY` | — | Requis si l'authentification Supabase Auth est utilisée |
 | `SUPABASE_STORAGE_BUCKET` | `media` | Bucket privé (URLs signées) |
 | `SUPABASE_PUBLIC_BUCKET` | `public-assets` | Bucket public (logo, couvertures) |
 
@@ -284,7 +285,7 @@ Aucun compte payant n'est requis : tout serveur SMTP convient. Guide complet :
 
 | Variable | Défaut | Description |
 |---|---|---|
-| `ADMIN_BOOTSTRAP_EMAIL` / `ADMIN_BOOTSTRAP_PASSWORD` | — | Utilisées uniquement par `npm run create-admin` |
+| `ADMIN_BOOTSTRAP_EMAIL` / `ADMIN_BOOTSTRAP_PASSWORD` | — | Facultatives, `npm run create-admin` : à retirer après usage (préférez `init-super-admin` et la saisie masquée) |
 | `ADMIN_BOOTSTRAP_FIRST_NAME` / `..._LAST_NAME` | `Administrateur` / `Principal` | Nom du premier admin |
 | `SEED_DEMO_DATA` | `false` | Active `npm run db:seed` sans `--force` |
 | `SEED_DEMO_PASSWORD` | *(aléatoire)* | Mot de passe commun des comptes de démo (≥ 10 caractères). S'il est absent, un mot de passe aléatoire est généré et affiché par le script |
@@ -311,6 +312,10 @@ Schéma appliqué par les migrations versionnées dans `supabase/migrations`, pl
 | `0001_init.sql` | Profils, adhésion et historique, départements et membres, galerie (albums, photos, accès), prédications, événements et inscriptions, annonces, témoignages, demandes de prière, finances, notifications, journal d'audit |
 | `0002_rls.sql` | Row Level Security : cloisonnement des données par rôle |
 | `0003_storage.sql` | Buckets Supabase (privé / public) et politiques associées |
+| `0004_local_auth_profiles.sql` | Profils indépendants de Supabase Auth (mot de passe scrypt) et lien facultatif `auth_user_id` |
+| `0005_security_hardening.sql` | Révocation des privilèges `anon` sur les tables sensibles, garde-fous des triggers |
+| `0006_department_nominations.sql` | Nominations des responsables, historique des fonctions et des départements |
+| `0007_emails.sql` | File d'envoi `email_outbox`, campagnes, préférence `email_opt_out` |
 
 ```bash
 npm run db:migrate                 # applique les migrations manquantes
@@ -368,7 +373,7 @@ Créés par `npm run db:seed` avec `SEED_DEMO_DATA=true` et le mot de passe déf
 | `ruth.assamoi@demo.laforteresse.test` | Membre | Refusé |
 | `daniel.ouattara@demo.laforteresse.test` | Membre | Suspendu |
 
-L'administrateur n'est **jamais** créé par le seed : `npm run create-admin` utilise `ADMIN_BOOTSTRAP_EMAIL` / `ADMIN_BOOTSTRAP_PASSWORD`, ou les arguments de la ligne de commande (prioritaires). Le mot de passe doit contenir **au moins 10 caractères, une lettre et un chiffre** ; si le compte existe déjà, il est promu administrateur et approuvé.
+L'administrateur n'est **jamais** créé par le seed. Pour le compte principal (pasteur), utilisez `npm run init-super-admin -- --email <adresse>` : le mot de passe est saisi à l'invite masquée, aucun doublon n'est créé, et le compte reçoit le rôle `admin` avec le statut approuvé. La commande `npm run create-admin -- <email>` reste disponible pour un administrateur supplémentaire ; elle lit `ADMIN_BOOTSTRAP_PASSWORD` si la variable est définie, sinon elle demande le mot de passe à l'invite. Dans les deux cas, le mot de passe doit contenir **au moins 10 caractères, une lettre et un chiffre**, et **n'est jamais accepté en argument de commande**.
 
 Le jeu de démonstration comprend aussi 10 départements, 3 prédications, 3 événements avec inscriptions, 4 albums (15 photos) et des annonces, témoignages et demandes de prière.
 
@@ -399,7 +404,7 @@ Base : `/api/v1`. Réponses JSON ; erreurs au format `{ "error": { "code", "mess
 |---|---|---|
 | `/health` | public | État du service, du mode base et du stockage |
 | `/auth` | mixte | `register`, `login`, `logout`, `refresh`, `session`, `profile` (PATCH), `profile/submit`, `avatar`, `password`, `forgot-password`, `reset-password`, `me/history` |
-| `/public` | public | `settings`, `departments[/:slug]`, `sermons[/:slug]`, `events[/:slug]`, `events/:slug/register`, `announcements`, `albums[/:slug]`, `testimonies`, `prayer-requests`, `gallery/takedown-requests` |
+| `/public` | public | `settings`, `departments[/:slug]`, `sermons[/:slug]`, `events[/:slug]`, `events/:slug/register`, `announcements`, `albums[/:slug]`, `testimonies`, `prayer-requests`, `gallery/takedown-requests`, `unsubscribe` (GET vérification, POST désinscription par jeton signé) |
 | `/members` | membre approuvé | `dashboard`, `announcements`, `albums[/:slug]`, `events`, `events/:slug/register`, `departments`, `departments/:id/requests`, `departments/requests[/:id]`, `notifications`, `notifications/unread-count`, `notifications/:id/read`, `notifications/read-all`, `directory`, `testimonies`, `testimonies/mine`, `prayer-requests/mine`, `audit/mine` |
 | `/media` | admin ou média | Albums : `albums`, `albums/:id`, `albums/:id/photos`, `photos/:id`, `albums/:id/access[/:profileId]`, `albums/:id/publish`, `albums/:id/archive`, `albums/:id/download` |
 | `/admin` | admin (staff pour les départements) | `/dashboard`, `/members/*` (+ `/:id/nominations`), `/departments/*` (+ `/:id/nominations`), `/sermons/*`, `/events/*` (+ `registrations`, `export`), `/announcements/*`, `/prayer-requests/*`, `/testimonies/*`, `/takedown-requests/*`, `/finance/{contributions,expenses,summary}`, `/settings/*`, `/emails/{status,campaigns,preview,broadcast,test,flush}`, `/audit-logs` |
@@ -461,6 +466,11 @@ particulier (tout serveur SMTP convient).
 
 Guide de configuration et de dépannage : [`docs/MESSAGERIE.md`](docs/MESSAGERIE.md).
 
+Désinscription : chaque message d'information contient un lien
+`/desinscription?token=…` **utilisable sans connexion**. Le jeton est signé
+(HMAC-SHA256, 180 jours) et ne permet de modifier que la préférence de son
+destinataire ; la désinscription n'est appliquée qu'après confirmation explicite.
+
 ---
 
 ## Sécurité et vie privée
@@ -473,6 +483,11 @@ Guide de configuration et de dépannage : [`docs/MESSAGERIE.md`](docs/MESSAGERIE
 - **Fichiers** : jamais exposés en direct ; liens signés expirant en 900 s.
 - **Vie privée** : l'annuaire des membres n'expose ni e-mail ni téléphone ni statut ; le formulaire de prière est confidentiel ; la galerie permet à toute personne représentée de demander un retrait.
 - **Row Level Security** activée dans `0002_rls.sql` pour un déploiement Supabase.
+- **Journalisation** : `LOG_LEVEL` filtre réellement les messages du serveur (horodatage ISO, pile des erreurs conservée).
+
+Le détail de l'audit du 27 octobre 2026 (vérifications exécutées, anomalies
+corrigées, points restant à la charge de l'exploitant) est dans
+[`docs/AUDIT_2026-10-27.md`](docs/AUDIT_2026-10-27.md).
 - **Journal d'audit** de toutes les actions administratives (acteur, action, entité, métadonnées).
 
 ---
@@ -533,7 +548,7 @@ En résumé :
 1. **Base** — créer un projet Supabase (ou un PostgreSQL managé), renseigner `DATABASE_URL`, appliquer `npm run db:migrate` puis `0002_rls.sql` et `0003_storage.sql`.
 2. **Stockage** — `STORAGE_DRIVER=supabase` (recommandé), sinon `STORAGE_LOCAL_DIR=/data/uploads` avec un volume persistant.
 3. **Service** — `docker build -t la-forteresse .` puis `docker run` avec `NODE_ENV=production`, `DATABASE_URL`, `SESSION_SECRET`, `COOKIE_SECURE=true` et `FRONTEND_URL` ; ou *New → Blueprint* sur Render.
-4. **Premier administrateur** — `npm run create-admin` avec `ADMIN_BOOTSTRAP_*`, puis retirer ces variables.
+4. **Premier administrateur** — `npm run init-super-admin -- --email <adresse>` depuis un environnement disposant de `DATABASE_URL` (mot de passe saisi à l'invite masquée).
 5. **Contrôles** — `GET /api/v1/health` doit répondre `{"status":"ok",...}`, connexion admin, upload d'une photo.
 
 **Base de données de production** : projet Supabase dédié `Eglise`

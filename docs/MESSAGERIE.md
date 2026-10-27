@@ -132,12 +132,26 @@ Tables concernées : `email_outbox` (file et historique par destinataire),
 
 - Chaque message contient l'adresse et le téléphone de l'église, et
   `MAIL_REPLY_TO` est proposé comme adresse de réponse.
-- Les messages d'information contiennent un lien de désinscription vers l'espace
-  membre (la préférence y est modifiable).
+- Les messages d'information contiennent un lien de désinscription qui
+  fonctionne **sans connexion** : `/desinscription?token=…`. Le jeton est signé
+  (HMAC-SHA256 avec `SESSION_SECRET`, valable 180 jours) et porte l'identifiant
+  du profil ; il est impossible de désinscrire quelqu'un d'autre en modifiant
+  l'URL. La page affiche l'adresse partiellement masquée et demande une
+  confirmation explicite (aucun effet sur un simple aperçu de lien).
+  La préférence reste modifiable depuis l'espace membre.
 - Le contenu des messages n'est pas journalisé en intégralité : seuls
   l'objet, l'audience et les compteurs le sont.
 - Les secrets SMTP ne sont **jamais** exposés par l'API : l'écran Messagerie
   n'affiche que l'hôte, le port et l'adresse d'expédition.
+
+### Endpoints publics concernés
+
+| Méthode | Route | Rôle |
+|---|---|---|
+| `GET` | `/api/v1/public/unsubscribe?token=…` | vérifie le jeton, renvoie l'adresse masquée, ne modifie rien |
+| `POST` | `/api/v1/public/unsubscribe` | applique la désinscription (`{ "token": "…" }`), idempotent, journalisé (`email.unsubscribe`) |
+
+Les deux routes sont limitées à 20 appels par heure et par adresse IP.
 
 ---
 
@@ -148,6 +162,7 @@ Tables concernées : `email_outbox` (file et historique par destinataire),
 | Aucun message ne part, statut « Journal » | `MAIL_DRIVER=log` : passez à `smtp` et redémarrez |
 | « Envoi impossible : … » sur le test | identifiants, port (587/465), `SMTP_SECURE` |
 | Messages en indésirables | SPF/DKIM du domaine, `MAIL_FROM_ADDRESS` |
+| « Ce lien de désinscription a expiré » | jeton de plus de 180 jours : la personne peut se désinscrire depuis son profil |
 | Messages en échec dans l'historique | lisez la dernière erreur affichée en haut de l'écran Messagerie |
 | Un membre ne reçoit rien | il a peut-être refusé les informations : vérifiez son profil |
 

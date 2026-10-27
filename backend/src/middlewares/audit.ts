@@ -1,4 +1,5 @@
 import type { Queryable } from '../db/client.js';
+import { logger } from '../utils/logger.js';
 
 export interface AuditEntry {
   actorId?: string | null;
@@ -28,7 +29,7 @@ export async function recordAudit(db: Queryable, entry: AuditEntry): Promise<voi
       ],
     );
   } catch (error) {
-    console.error("[audit] echec d'ecriture du journal", error);
+    logger.error("[audit] echec d'ecriture du journal", error);
   }
 }
 

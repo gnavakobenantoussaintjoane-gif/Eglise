@@ -85,11 +85,14 @@ Aucun mot de passe n'est écrit dans le code. La procédure officielle est une
 commande serveur exécutée par la personne qui administre le déploiement :
 
 ```bash
-npm run create-admin -- pasteur@exemple.org 'MotDePasseSolide2026!'
+npm run init-super-admin -- --email pasteur@exemple.org
 ```
 
-Le script crée (ou promeut) un compte `admin` approuvé, journalise l'opération
-et n'accepte jamais de mot de passe par défaut. Sur Supabase, l'opération se fait
+Le mot de passe est demandé à l'invite masquée : il ne doit **jamais** être
+passé en argument (il resterait dans l'historique du shell et la liste des
+processus). Le script crée (ou promeut) un compte `admin` approuvé, journalise
+l'opération, n'accepte jamais de mot de passe par défaut et ne crée pas de
+doublon. Sur Supabase, l'opération se fait
 depuis un environnement disposant de `DATABASE_URL`, jamais depuis le navigateur.
 
 ---

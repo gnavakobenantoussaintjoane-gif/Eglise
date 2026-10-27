@@ -17,6 +17,7 @@ import { TestimoniesPage } from '../pages/public/TestimoniesPage';
 import { PrayerPage } from '../pages/public/PrayerPage';
 import { ContactPage } from '../pages/public/ContactPage';
 import { PrivacyPage } from '../pages/public/PrivacyPage';
+import { UnsubscribePage } from '../pages/public/UnsubscribePage';
 import { NotFoundPage } from '../pages/public/NotFoundPage';
 
 /* Authentification */
@@ -105,6 +106,9 @@ export function AppRoutes() {
         <Route path="confidentialite" element={<PrivacyPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
+
+      {/* Désinscription depuis un e-mail (lien signé, aucune connexion requise) */}
+      <Route path="desinscription" element={<UnsubscribePage />} />
 
       {/* Authentification */}
       <Route path="inscription" element={<RegisterPage />} />
