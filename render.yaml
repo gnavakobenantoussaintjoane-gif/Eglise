@@ -1,0 +1,48 @@
+# Blueprint Render — déploiement mono-service (API + interface dans un seul conteneur).
+# Docs : https://render.com/docs/blueprint-spec
+#
+# Les variables marquées `sync: false` doivent être saisies dans le tableau de
+# bord Render au moment du déploiement : elles ne sont pas versionnées.
+services:
+  - type: web
+    name: la-forteresse
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/v1/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "4000"
+      - key: DATABASE_URL
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: FRONTEND_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      # URL publique de l'API pour les liens signés. Vide = liens relatifs
+      # (recommandé lorsque l'interface et l'API partagent le même domaine).
+      - key: PUBLIC_API_URL
+        value: ""
+      # Supabase Storage évite de dépendre d'un disque persistant (payant).
+      - key: STORAGE_DRIVER
+        value: supabase
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: STORAGE_LOCAL_DIR
+        value: /data/uploads
+      - key: AUTO_MIGRATE
+        value: "true"
+      - key: SEED_DEMO_DATA
+        value: "false"
+      - key: ADMIN_BOOTSTRAP_EMAIL
+        sync: false
+      - key: ADMIN_BOOTSTRAP_PASSWORD
+        sync: false

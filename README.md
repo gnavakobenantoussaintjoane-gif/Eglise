@@ -1,5 +1,10 @@
 # La Forteresse de l'Éternel
 
+[![CI](https://github.com/gnavakobenantoussaintjoane-gif/Eglise/actions/workflows/ci.yml/badge.svg)](https://github.com/gnavakobenantoussaintjoane-gif/Eglise/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-47%20%2817%20API%20%2B%2030%20interface%29-brightgreen)](https://github.com/gnavakobenantoussaintjoane-gif/Eglise/actions/workflows/ci.yml)
+[![Licence](https://img.shields.io/badge/licence-MIT-blue)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%E2%89%A522-339933)](.nvmrc)
+
 Application web complète pour l'église évangélique **La Forteresse de l'Éternel** (Abidjan, Côte d'Ivoire) : site vitrine public, espace membre avec parcours d'adhésion, espace média et back-office d'administration.
 
 Le dépôt contient une **API REST** (Node/Express + TypeScript) et une **interface React**, dans un monorepo npm. Le schéma de base de données est fourni en migrations SQL prêtes pour PostgreSQL/Supabase, avec une base locale **PGlite** intégrée pour développer sans rien installer.
@@ -29,8 +34,10 @@ npm run dev                            # API :4000 · site :5173
 - [Rôles et permissions](#rôles-et-permissions)
 - [Sécurité et vie privée](#sécurité-et-vie-privée)
 - [Tests et vérifications](#tests-et-vérifications)
+- [Intégration continue](#intégration-continue)
 - [Déploiement](#déploiement)
 - [Dépannage](#dépannage)
+- [Licence](#licence)
 
 ---
 
@@ -416,22 +423,56 @@ npm run test                             # 17 tests API + 30 tests interface
 | `tsc --noEmit` backend + frontend | ✅ aucune erreur |
 | Tests API (Vitest + supertest) | ✅ **17/17** |
 | Tests interface (Vitest + Testing Library) | ✅ **30/30** |
-| `npm run build --workspace frontend` | ✅ build de production |
+| `npm run build` (API + interface) | ✅ build de production |
+| CI GitHub Actions | ✅ 3 travaux, voir [Intégration continue](#intégration-continue) |
 
 - **API** (`backend/tests/api.test.ts`) : parcours d'authentification, contrôle d'accès par rôle, validation, CRUD d'administration, finances et téléchargements — exécutés sur une vraie base.
 - **Interface** : composants (`ui.test.tsx`), formatage FR (`format.test.ts`), routes (`AppRoutes.test.tsx`) et **fumée de toutes les routes publiques** plus des zones protégées (`routes.smoke.test.tsx`).
 
 ---
 
+## Intégration continue
+
+Trois travaux tournent à chaque push sur `main` et sur chaque pull request (`.github/workflows/ci.yml`) :
+
+| Travail | Contenu |
+|---|---|
+| API — types et tests | `tsc --noEmit` + 17 tests d'intégration |
+| Interface — types, tests et build | `tsc --noEmit` + 30 tests + build publié en artefact |
+| Image Docker | Construction de l'image pour valider le `Dockerfile` |
+
+Un quatrième workflow (`.github/workflows/docker-publish.yml`) publie l'image de production sur GitHub Container Registry lors d'un tag `v*` :
+
+```bash
+git tag v1.0.0 && git push origin v1.0.0   # → ghcr.io/gnavakobenantoussaintjoane-gif/eglise:1.0.0
+```
+
+Pour exiger la CI avant fusion : **Settings → Branches → Add rule** sur `main`, case *Require status checks to pass*.
+
+---
+
 ## Déploiement
 
-1. **Base** — créer un projet Supabase (ou un PostgreSQL managé) et renseigner `DATABASE_URL`. Appliquer les migrations (`npm run db:migrate`, ou via la CLI Supabase) et `0002_rls.sql` + `0003_storage.sql`.
-2. **Stockage** — `STORAGE_DRIVER=supabase`, avec `SUPABASE_URL` et `SUPABASE_SERVICE_ROLE_KEY`. Sinon, monter un volume persistant sur `STORAGE_LOCAL_DIR`.
-3. **API** — `npm run build` puis `npm start` (`NODE_ENV=production`, `DATABASE_URL` obligatoire, `COOKIE_SECURE=true` derrière HTTPS, `CORS_ORIGINS` et `FRONTEND_URL` sur le domaine réel). `AUTO_MIGRATE` peut être désactivé au profit des migrations versionnées.
-4. **Frontend** — `npm run build --workspace frontend` produit `frontend/dist` à servir en statique, avec réécriture SPA vers `index.html`. Si l'API n'est pas sur le même domaine, définir `VITE_API_URL` ; sinon laisser la valeur par défaut `/api/v1` et proxyfier `/api` et `/files` vers l'API.
-5. **Premier administrateur** — `npm run create-admin` avec `ADMIN_BOOTSTRAP_*`, puis **retirer ces variables** de l'environnement.
+Le dépôt fournit tout ce qu'il faut pour trois scénarios :
 
-Ne jamais committer `backend/.env` ni `backend/var/` : ils contiennent les secrets, la base locale et les fichiers uploadés (déjà couverts par `.gitignore`).
+| Fichier | Usage |
+|---|---|
+| `Dockerfile` | Image multi-étapes : l'API sert aussi l'interface compilée (déploiement mono-service, cookies de première partie) |
+| `render.yaml` | Blueprint Render (service web Docker + contrôle de santé + variables) |
+| `netlify.toml` | Interface statique seule, avec réécriture SPA et cache des assets |
+| `.github/workflows/docker-publish.yml` | Publication de l'image sur `ghcr.io` |
+
+En résumé :
+
+1. **Base** — créer un projet Supabase (ou un PostgreSQL managé), renseigner `DATABASE_URL`, appliquer `npm run db:migrate` puis `0002_rls.sql` et `0003_storage.sql`.
+2. **Stockage** — `STORAGE_DRIVER=supabase` (recommandé), sinon `STORAGE_LOCAL_DIR=/data/uploads` avec un volume persistant.
+3. **Service** — `docker build -t la-forteresse .` puis `docker run` avec `NODE_ENV=production`, `DATABASE_URL`, `SESSION_SECRET`, `COOKIE_SECURE=true` et `FRONTEND_URL` ; ou *New → Blueprint* sur Render.
+4. **Premier administrateur** — `npm run create-admin` avec `ADMIN_BOOTSTRAP_*`, puis retirer ces variables.
+5. **Contrôles** — `GET /api/v1/health` doit répondre `{"status":"ok",...}`, connexion admin, upload d'une photo.
+
+📖 **Guide complet : [`docs/DEPLOIEMENT.md`](docs/DEPLOIEMENT.md)** — Supabase, variables de production, Docker/Compose, Render, Netlify/Vercel, vérifications après mise en ligne, sauvegardes, retour arrière et dépannage.
+
+Le serveur **refuse de démarrer** si `DATABASE_URL` manque en production ou si `SESSION_SECRET` ressemble à une valeur d'exemple. Ne jamais committer `backend/.env` ni `backend/var/` (déjà couverts par `.gitignore`).
 
 ---
 
@@ -448,5 +489,9 @@ Ne jamais committer `backend/.env` ni `backend/var/` : ils contiennent les secre
 | Uploads refusés | Vérifier `MAX_UPLOAD_MB` et la limite par type de fichier |
 
 ---
+
+## Licence
+
+Distribué sous licence **MIT** — voir [`LICENSE`](LICENSE).
 
 Application de l'église évangélique **La Forteresse de l'Éternel** — Abidjan, Côte d'Ivoire.
