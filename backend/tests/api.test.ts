@@ -599,3 +599,157 @@ describe('API - messagerie', () => {
     expect(flush.body.sent).toBeGreaterThanOrEqual(1);
   });
 });
+
+/**
+ * Initialisation du compte principal (pasteur / SUPER_ADMIN_PASTOR).
+ *
+ * Le mot de passe n'est jamais fourni par l'environnement : ces tests appellent
+ * la logique du script avec un mot de passe de test, sur la base isolee.
+ */
+describe('Initialisation du compte principal', () => {
+  const PASTOR = {
+    email: 'Pasteur.Principal@test.local',
+    password: 'PasteurPrincipal2026!',
+    firstName: 'Joanne',
+    lastName: 'Gnava',
+  };
+
+  it('cree le compte principal, hache le mot de passe et accorde les permissions', async () => {
+    const { initSuperAdmin, inspectSuperAdmin } = await import('../src/auth/bootstrap.js');
+    const { getDatabase } = await import('../src/db/client.js');
+    const db = getDatabase();
+
+    // Aucun administrateur au depart : l'initialisation est autorisee.
+    const before = await inspectSuperAdmin(db, PASTOR.email);
+    expect(before.exists).toBe(false);
+
+    // `allowAdditionalAdmin` est necessaire ici : les scenarios precedents de ce
+    // fichier ont deja cree un administrateur dans cette base isolee. En
+    // production, la base ne contient aucun administrateur et le garde-fou
+    // s'applique (voir le dernier scenario de ce bloc).
+    const result = await initSuperAdmin(db, { ...PASTOR, allowAdditionalAdmin: true });
+    expect(result.action).toBe('created');
+
+    const state = await inspectSuperAdmin(db, PASTOR.email);
+    expect(state.role).toBe('admin');
+    expect(state.status).toBe('approved');
+    expect(state.hasPassword).toBe(true);
+
+    // Le mot de passe n'est jamais stocke en clair.
+    const { rows } = await db.query<{ encrypted_password: string | null }>(
+      `select u.encrypted_password from auth.users u
+        join public.profiles p on p.id = u.id
+       where lower(p.email) = lower($1)`,
+      [PASTOR.email],
+    );
+    const stored = rows[0]?.encrypted_password ?? '';
+    expect(stored).not.toContain(PASTOR.password);
+    expect(stored.startsWith('scrypt$')).toBe(true);
+
+    // Le compte se connecte reellement et recoit toutes les permissions.
+    const agent = request.agent(app);
+    const login = await agent
+      .post(`${API}/auth/login`)
+      .send({ email: PASTOR.email, password: PASTOR.password })
+      .expect(200);
+    expect(login.body.profile.role).toBe('admin');
+    expect(login.body.permissions.isAdmin).toBe(true);
+
+    const dashboard = await agent.get(`${API}/admin/dashboard`).expect(200);
+    expect(dashboard.body.members).toBeTruthy();
+
+    // L'operation est journalisee.
+    const audit = await agent.get(`${API}/admin/audit-logs`).expect(200);
+    expect(
+      audit.body.logs.some((log: { action: string }) => log.action === 'admin.bootstrap'),
+    ).toBe(true);
+  });
+
+  it('ne cree pas de doublon quand le compte existe deja', async () => {
+    const { initSuperAdmin } = await import('../src/auth/bootstrap.js');
+    const { getDatabase } = await import('../src/db/client.js');
+    const db = getDatabase();
+
+    const result = await initSuperAdmin(db, PASTOR);
+    expect(result.action).toBe('already_admin');
+
+    const { rows } = await db.query<{ total: string }>(
+      'select count(*)::text as total from public.profiles where lower(email) = lower($1)',
+      [PASTOR.email],
+    );
+    expect(Number(rows[0]?.total)).toBe(1);
+  });
+
+  it('refuse un mot de passe trop faible sans rien ecrire', async () => {
+    const { initSuperAdmin, inspectSuperAdmin, BootstrapError } = await import(
+      '../src/auth/bootstrap.js'
+    );
+    const { getDatabase } = await import('../src/db/client.js');
+    const db = getDatabase();
+
+    await expect(
+      initSuperAdmin(db, { email: 'faible@test.local', password: 'court' }),
+    ).rejects.toBeInstanceOf(BootstrapError);
+
+    const state = await inspectSuperAdmin(db, 'faible@test.local');
+    expect(state.exists).toBe(false);
+  });
+
+  it('refuse la promotion implicite d un compte ordinaire', async () => {
+    const { initSuperAdmin, inspectSuperAdmin } = await import('../src/auth/bootstrap.js');
+    const { getDatabase } = await import('../src/db/client.js');
+    const db = getDatabase();
+
+    // Compte de test cree par les scenarios precedents, non administrateur.
+    const cible = 'yousef.membre@test.local';
+    await db.query(
+      `insert into auth.users (id, email, encrypted_password, email_confirmed_at)
+       values (gen_random_uuid(), $1, null, now())`,
+      [cible],
+    );
+    const { rows } = await db.query<{ id: string }>(
+      'select id from auth.users where lower(email) = $1',
+      [cible],
+    );
+    await db.query(
+      `insert into public.profiles (id, email, first_name, last_name, status, role)
+       values ($1, $2, 'Yousef', 'Membre', 'approved', 'member')`,
+      [rows[0]?.id, cible],
+    );
+
+    // Sans --promote : refus explicite, aucune elevation silencieuse.
+    await expect(
+      initSuperAdmin(db, { email: cible, password: 'MotDePasseSolide2026!' }),
+    ).rejects.toThrow(/existe deja/i);
+
+    const before = await inspectSuperAdmin(db, cible);
+    expect(before.role).toBe('member');
+
+    // Avec --promote : elevation explicite, journalisee, sans doublon.
+    const promoted = await initSuperAdmin(db, {
+      email: cible,
+      password: 'MotDePasseSolide2026!',
+      promote: true,
+    });
+    expect(promoted.action).toBe('promoted');
+    const after = await inspectSuperAdmin(db, cible);
+    expect(after.role).toBe('admin');
+    expect(after.status).toBe('approved');
+
+    const { rows: count } = await db.query<{ total: string }>(
+      'select count(*)::text as total from public.profiles where lower(email) = lower($1)',
+      [cible],
+    );
+    expect(Number(count[0]?.total)).toBe(1);
+  });
+
+  it('refuse de creer un second administrateur sans --force', async () => {
+    const { initSuperAdmin, BootstrapError } = await import('../src/auth/bootstrap.js');
+    const { getDatabase } = await import('../src/db/client.js');
+    const db = getDatabase();
+
+    await expect(
+      initSuperAdmin(db, { email: 'intrus@test.local', password: 'IntrusSolide2026!' }),
+    ).rejects.toBeInstanceOf(BootstrapError);
+  });
+});

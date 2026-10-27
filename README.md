@@ -346,7 +346,8 @@ Depuis la racine (ils délèguent au bon workspace) :
 | `npm run db:migrate` | Applique les migrations |
 | `npm run db:seed` | Jeu de démonstration (`-- --force` pour ignorer `SEED_DEMO_DATA`) |
 | `npm run db:reset` | Réinitialise la base |
-| `npm run create-admin` | Crée le premier administrateur |
+| `npm run init-super-admin` | **Compte principal (pasteur)** : mot de passe saisi à l'invite masquée, rôle `admin` + statut approuvé, aucun doublon. Voir [`docs/INITIALISATION_ADMIN.md`](docs/INITIALISATION_ADMIN.md) |
+| `npm run create-admin` | Ajoute un administrateur (mot de passe demandé à l'invite) |
 
 Côté `frontend` : `npm run dev --workspace frontend`, `npm run build --workspace frontend`, `npm run test --workspace frontend`.
 
@@ -420,6 +421,11 @@ Les listes paginées renvoient `{ <ressource>, pagination: { page, perPage, tota
 | `admin` | Accès total au back-office, y compris finances, paramètres et journal d'audit |
 
 Les permissions calculées sont exposées par la session (`isAdmin`, `isMedia`, `canAccessMembersArea`, `canManageGallery`, `canManageDepartments`) et réutilisées par l'interface pour masquer les actions non autorisées — sans jamais remplacer le contrôle serveur.
+
+La création du compte principal (rôle fonctionnel `SUPER_ADMIN_PASTOR` → rôle
+technique `admin`) est décrite pas à pas dans
+[`docs/INITIALISATION_ADMIN.md`](docs/INITIALISATION_ADMIN.md) : `npm run init-super-admin -- --email <adresse>`,
+mot de passe saisi à l'invite masquée, jamais en argument.
 
 La correspondance entre rôles fonctionnels (`SUPER_ADMIN_PASTOR`, `DEPARTMENT_HEAD`, `DEPARTMENT_ASSISTANT`, `MEMBER`, `PENDING_MEMBER`) et ce modèle technique, les règles d'auto-élévation interdites et le cycle de vie des nominations sont détaillés dans [`docs/ROLES_ET_PERMISSIONS.md`](docs/ROLES_ET_PERMISSIONS.md).
 
