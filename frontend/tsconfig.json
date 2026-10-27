@@ -16,9 +16,10 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "baseUrl": ".",
+    // `paths` est resolu relativement a ce fichier : `baseUrl` n'est plus
+    // necessaire (et il est deprecie depuis TypeScript 6).
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src", "vite.config.ts"]

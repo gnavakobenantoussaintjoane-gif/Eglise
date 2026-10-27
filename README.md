@@ -1,7 +1,7 @@
 # La Forteresse de l'Éternel
 
 [![CI](https://github.com/gnavakobenantoussaintjoane-gif/Eglise/actions/workflows/ci.yml/badge.svg)](https://github.com/gnavakobenantoussaintjoane-gif/Eglise/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-47%20%2817%20API%20%2B%2030%20interface%29-brightgreen)](https://github.com/gnavakobenantoussaintjoane-gif/Eglise/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-79%20%2844%20API%20%2B%2035%20interface%29-brightgreen)](https://github.com/gnavakobenantoussaintjoane-gif/Eglise/actions/workflows/ci.yml)
 [![Licence](https://img.shields.io/badge/licence-MIT-blue)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A522-339933)](.nvmrc)
 
@@ -16,6 +16,13 @@ npm run db:migrate && npm run db:seed
 npm run init-super-admin -- --email vous@exemple.ci   # compte principal (mot de passe saisi masqué)
 npm run dev                            # site :3000 · API :4000 (proxifiée)
 ```
+
+> **Première ouverture dans un éditeur ?** Guide détaillé, y compris les
+> erreurs d'import affichées avant `npm install` :
+> [`docs/DEMARRAGE_RAPIDE.md`](docs/DEMARRAGE_RAPIDE.md).
+>
+> Le dépôt est un **monorepo** : `npm install` se lance **à la racine**, jamais
+> dans `frontend/` ou `backend/`.
 
 ---
 
