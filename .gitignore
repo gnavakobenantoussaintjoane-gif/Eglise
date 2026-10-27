@@ -1,0 +1,33 @@
+# Dependances
+node_modules/
+.pnpm-store/
+
+# Builds
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# Variables d'environnement et secrets
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Donnees locales (PGlite, uploads)
+backend/var/
+var/
+uploads/
+
+# Tests et outils
+coverage/
+.vitest/
+playwright-report/
+test-results/
+
+# Systeme
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
+.eslintcache
