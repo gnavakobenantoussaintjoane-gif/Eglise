@@ -31,6 +31,17 @@ import {
   updateDepartment,
 } from '../departments/service.js';
 import {
+  broadcastSchema,
+  flushOutbox,
+  listCampaigns,
+  mailStatus,
+  previewBroadcast,
+  sendBroadcast,
+  sendConfigurationTest,
+  testEmailSchema,
+} from './emails.js';
+import { sendNominationEmail } from '../../services/email/index.js';
+import {
   closeNomination,
   openNomination,
   listDepartmentNominations,
@@ -327,6 +338,41 @@ adminRouter.post(
       body: 'Vous avez ete ajoute a un departement.',
       link: '/espace-membre/departements',
     });
+
+    // Information par e-mail du membre nomme (une panne d'envoi n'annule rien).
+    const nomme = await db.query<{
+      email: string;
+      first_name: string | null;
+      last_name: string | null;
+      department_name: string;
+    }>(
+      `select p.email, p.first_name, p.last_name, d.name as department_name
+         from public.profiles p, public.departments d
+        where p.id = $1 and d.id = $2`,
+      [input.profileId, id],
+    );
+    const destinataire = nomme.rows[0];
+    if (destinataire) {
+      await sendNominationEmail(
+        db,
+        {
+          id: input.profileId,
+          email: destinataire.email,
+          fullName: `${destinataire.first_name ?? ''} ${destinataire.last_name ?? ''}`.trim(),
+        },
+        {
+          departmentName: destinataire.department_name,
+          roleLabel:
+            input.role === 'leader'
+              ? 'Responsable'
+              : input.role === 'assistant'
+                ? 'Adjoint'
+                : 'Membre',
+          functionTitle: input.functionTitle ?? null,
+          startedOn: input.startedOn ?? null,
+        },
+      );
+    }
     await recordAudit(db, {
       actorId: profile.id,
       actorEmail: profile.email,
@@ -908,6 +954,70 @@ adminRouter.post(
     const settings = await setBrandingImage(kind, stored.path, profile);
     await removeStoredFile(kind === 'logo' ? previous.logo : previous.hero);
     res.json(settings);
+  }),
+);
+
+/* -------------------------------------------------------------------------- */
+/* Messagerie                                                                  */
+/* -------------------------------------------------------------------------- */
+
+// Etat de la messagerie : mode d'envoi (sans secret) et file d'attente.
+adminRouter.get(
+  '/emails/status',
+  requireAdmin,
+  asyncHandler(async (_req, res) => {
+    res.json(await mailStatus());
+  }),
+);
+
+// Historique des messages d'information envoyes.
+adminRouter.get(
+  '/emails/campaigns',
+  requireAdmin,
+  asyncHandler(async (_req, res) => {
+    res.json({ campaigns: await listCampaigns() });
+  }),
+);
+
+// Apercu du rendu avant envoi (aucun message n'est cree).
+adminRouter.post(
+  '/emails/preview',
+  requireAdmin,
+  validate({ body: broadcastSchema.pick({ subject: true, body: true }) }),
+  asyncHandler(async (req, res) => {
+    const input = bodyOf<{ subject: string; body: string }>(req);
+    res.json(await previewBroadcast(input));
+  }),
+);
+
+// Envoi d'un message d'information a une audience resolue en base.
+adminRouter.post(
+  '/emails/broadcast',
+  requireAdmin,
+  validate({ body: broadcastSchema }),
+  asyncHandler(async (req, res) => {
+    const input = bodyOf<z.infer<typeof broadcastSchema>>(req);
+    res.status(201).json(await sendBroadcast(input, authContext(req).profile));
+  }),
+);
+
+// Message de controle vers l'adresse de l'administrateur.
+adminRouter.post(
+  '/emails/test',
+  requireAdmin,
+  validate({ body: testEmailSchema }),
+  asyncHandler(async (req, res) => {
+    const { email } = bodyOf<{ email: string }>(req);
+    res.json(await sendConfigurationTest(email, authContext(req).profile));
+  }),
+);
+
+// Relance immediate du traitement de la file.
+adminRouter.post(
+  '/emails/flush',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    res.json(await flushOutbox(authContext(req).profile));
   }),
 );
 

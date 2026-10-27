@@ -406,3 +406,196 @@ describe('API - permissions sensibles et historique des nominations', () => {
     ).toBe(true);
   });
 });
+
+/**
+ * Messagerie : envoi d'informations aux membres.
+ *
+ * Les tests utilisent un transport memoire (`MemoryTransport`) : aucun message
+ * ne quitte la machine, mais le contenu produit est verifie exactement.
+ */
+describe('API - messagerie', () => {
+  const DESTINATAIRE = {
+    firstName: 'Yao',
+    lastName: 'Kouassi',
+    email: 'yao.kouassi@test.local',
+    password: 'Destinataire2026!',
+  };
+  let destinataireId = '';
+  let destinataireAgent: ReturnType<typeof request.agent>;
+
+  beforeAll(async () => {
+    destinataireAgent = request.agent(app);
+    await destinataireAgent.post(`${API}/auth/register`).send(DESTINATAIRE).expect(201);
+    await destinataireAgent
+      .patch(`${API}/auth/profile`)
+      .send({ city: 'Abidjan', phone: '+225 07 00 00 00 03', profession: 'Comptable' })
+      .expect(200);
+    await destinataireAgent.post(`${API}/auth/profile/submit`).expect(200);
+    const { getDatabase } = await import('../src/db/client.js');
+    const { rows } = await getDatabase().query<{ id: string }>(
+      'select id from public.profiles where email = $1',
+      [DESTINATAIRE.email],
+    );
+    destinataireId = rows[0]?.id ?? '';
+  }, 60_000);
+
+  /** Vide la boite memoire avant chaque scenario. */
+  async function resetMailbox() {
+    const { setMailTransport, MemoryTransport } = await import(
+      '../src/services/email/transport.js'
+    );
+    const transport = new MemoryTransport();
+    setMailTransport(transport);
+    return transport;
+  }
+
+  it('envoie un e-mail a un membre quand sa demande est approuvee', async () => {
+    const transport = await resetMailbox();
+
+    await adminAgent
+      .patch(`${API}/admin/members/${destinataireId}/status`)
+      .send({ status: 'approved' })
+      .expect(200);
+
+    const message = transport.sent.find((entry) => entry.to === DESTINATAIRE.email);
+    expect(message).toBeTruthy();
+    expect(message?.subject).toContain('adhésion');
+    expect(message?.text).toContain('Yao');
+    expect(message?.html).toContain('<!DOCTYPE html>');
+
+    // Le message est trace dans la file comme envoye.
+    const status = await adminAgent.get(`${API}/admin/emails/status`).expect(200);
+    expect(status.body.outbox.sent).toBeGreaterThanOrEqual(1);
+  });
+
+  it('envoie un lien de reinitialisation par e-mail', async () => {
+    const transport = await resetMailbox();
+
+    const res = await request(app)
+      .post(`${API}/auth/forgot-password`)
+      .send({ email: DESTINATAIRE.email })
+      .expect(200);
+
+    // En developpement le lien est aussi renvoye pour faciliter les essais.
+    expect(res.body.devResetUrl).toContain('reinitialiser-mot-de-passe');
+    const message = transport.sent.find((entry) => entry.to === DESTINATAIRE.email);
+    expect(message?.text).toContain('reinitialiser-mot-de-passe');
+  });
+
+  it('applique la preference de desinscription aux messages d information', async () => {
+    // Le membre refuse les messages d'information.
+    await destinataireAgent
+      .patch(`${API}/auth/profile`)
+      .send({ emailOptOut: true })
+      .expect(200);
+
+    const { getDatabase } = await import('../src/db/client.js');
+    const { rows } = await getDatabase().query<{ email_opt_out: boolean }>(
+      'select email_opt_out from public.profiles where id = $1',
+      [destinataireId],
+    );
+    expect(rows[0]?.email_opt_out).toBe(true);
+
+    const transport = await resetMailbox();
+    await adminAgent
+      .post(`${API}/admin/emails/broadcast`)
+      .send({
+        subject: 'Information de la semaine',
+        body: 'Voici les nouvelles de la communaute pour cette semaine.',
+        audience: 'approved',
+        sendNow: true,
+      })
+      .expect(201);
+
+    // Le membre desinscrit ne doit pas recevoir ce message d'information…
+    expect(transport.sent.some((entry) => entry.to === DESTINATAIRE.email)).toBe(false);
+    // …mais un message transactionnel le joint toujours.
+    const resetTransport = await resetMailbox();
+    await request(app)
+      .post(`${API}/auth/forgot-password`)
+      .send({ email: DESTINATAIRE.email })
+      .expect(200);
+    expect(resetTransport.sent.some((entry) => entry.to === DESTINATAIRE.email)).toBe(true);
+
+    // Retour a l'etat initial pour les scenarios suivants.
+    await destinataireAgent
+      .patch(`${API}/auth/profile`)
+      .send({ emailOptOut: false })
+      .expect(200);
+  });
+
+  it('envoie un message d information aux membres approuves', async () => {
+    const transport = await resetMailbox();
+
+    const res = await adminAgent
+      .post(`${API}/admin/emails/broadcast`)
+      .send({
+        subject: 'Culte special dimanche',
+        body: 'Le culte de ce dimanche commence a 8h. Toute la communaute est invitee.',
+        audience: 'approved',
+        sendNow: true,
+      })
+      .expect(201);
+
+    expect(res.body.recipients).toBeGreaterThan(0);
+    expect(res.body.campaignId).toBeTruthy();
+    expect(transport.sent.length).toBe(res.body.recipients);
+    const message = transport.sent[0];
+    expect(message?.subject).toBe('Culte special dimanche');
+    expect(message?.text).toContain('8h');
+    expect(message?.html).toContain('Se désinscrire');
+
+    // La campagne apparait dans l'historique.
+    const campaigns = await adminAgent.get(`${API}/admin/emails/campaigns`).expect(200);
+    expect(
+      campaigns.body.campaigns.some(
+        (campaign: { subject: string; sent: number }) =>
+          campaign.subject === 'Culte special dimanche' && campaign.sent > 0,
+      ),
+    ).toBe(true);
+  });
+
+  it('refuse un message d information aux membres simples', async () => {
+    const transport = await resetMailbox();
+    const res = await destinataireAgent
+      .post(`${API}/admin/emails/broadcast`)
+      .send({ subject: 'Test interdit', body: 'Ce message ne doit pas partir.' });
+    expect(res.status).toBe(403);
+    expect(transport.sent).toHaveLength(0);
+  });
+
+  it('rejette une audience vide ou invalide', async () => {
+    const res = await adminAgent
+      .post(`${API}/admin/emails/broadcast`)
+      .send({ subject: 'x', body: 'court' })
+      .expect(422);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('reessaie un envoi en echec puis le marque comme envoye', async () => {
+    const { setMailTransport, MemoryTransport } = await import(
+      '../src/services/email/transport.js'
+    );
+    const transport = new MemoryTransport();
+    // Le fournisseur echoue une fois : le message reste en attente.
+    transport.failNext = 1;
+    setMailTransport(transport);
+
+    await adminAgent
+      .post(`${API}/admin/emails/broadcast`)
+      .send({
+        subject: 'Message avec panne simulee',
+        body: 'Ce message doit etre rejoue apres une panne temporaire.',
+        audience: 'approved',
+        sendNow: true,
+      })
+      .expect(201);
+
+    const statusAfterFailure = await adminAgent.get(`${API}/admin/emails/status`).expect(200);
+    expect(statusAfterFailure.body.outbox.pending).toBeGreaterThanOrEqual(1);
+
+    // Deuxieme passage : la file est videe.
+    const flush = await adminAgent.post(`${API}/admin/emails/flush`).expect(200);
+    expect(flush.body.sent).toBeGreaterThanOrEqual(1);
+  });
+});

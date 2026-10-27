@@ -15,6 +15,8 @@ const profileSchema = z.object({
   bio: z.string().trim().max(1500, 'Présentation trop longue (1500 caractères).').optional(),
   departmentInterestId: z.string().optional(),
   consentPhotos: z.boolean(),
+  // Case « recevoir les informations » : cochee par defaut, decochee = refus.
+  receiveEmails: z.boolean(),
 });
 
 export type ProfileFormValues = z.infer<typeof profileSchema>;
@@ -52,6 +54,7 @@ export function ProfileForm({
       bio: profile.bio ?? '',
       departmentInterestId: profile.departmentInterestId ?? '',
       consentPhotos: Boolean(profile.consentPhotos),
+      receiveEmails: !profile.emailOptOut,
     },
   });
 
@@ -122,6 +125,12 @@ export function ProfileForm({
         label="J’autorise l’église à utiliser mon image sur le site"
         description="Vous pouvez retirer ce consentement à tout moment."
         {...register('consentPhotos')}
+      />
+
+      <Checkbox
+        label="Je souhaite recevoir les informations de l’église par e-mail"
+        description="Annonces, événements et nouvelles de la communauté. Les messages indispensables à votre compte (réinitialisation du mot de passe, décision d’adhésion) vous seront envoyés dans tous les cas."
+        {...register('receiveEmails')}
       />
 
       <div className="flex justify-end">

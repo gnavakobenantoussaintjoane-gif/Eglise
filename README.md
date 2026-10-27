@@ -32,6 +32,7 @@ npm run dev                            # site :3000 · API :4000 (proxifiée)
 - [Routes du site](#routes-du-site)
 - [API](#api)
 - [Rôles et permissions](#rôles-et-permissions)
+- [Messagerie](#messagerie)
 - [Sécurité et vie privée](#sécurité-et-vie-privée)
 - [Tests et vérifications](#tests-et-vérifications)
 - [Intégration continue](#intégration-continue)
@@ -72,6 +73,10 @@ Nécessite un compte **approuvé** par un administrateur.
 - **Événements** : inscription aux rendez-vous de l'église.
 - **Témoignages** : rédaction et suivi de modération.
 
+Le membre peut modifier sa **préférence de réception des e-mails d'information** depuis
+« Mon profil » ; les messages indispensables au compte (réinitialisation du mot de
+passe, décision d'adhésion) continuent de lui être adressés.
+
 ### Espace média (`/media`)
 
 Réservé aux administrateurs et à l'équipe média : création d'albums, upload de photos, gestion des autorisations d'accès photo par photo, publication, archivage et téléchargement d'un album en ZIP.
@@ -90,6 +95,7 @@ Réservé aux administrateurs et à l'équipe média : création d'albums, uploa
 | Prière | Boîte de réception des demandes, statut, notes |
 | Modération | Témoignages (approbation/refus) et signalements de retrait |
 | Finances | Contributions, dépenses, résumé |
+| Messagerie | Message d'information aux membres (audience par rôle ou département), aperçu, historique des envois, test de configuration, file d'attente |
 | Paramètres | Identité de l'église, couleurs, horaires de culte, réseaux sociaux, logo, hero |
 | Journal | Journal d'audit filtrable (action, entité, acteur) |
 
@@ -254,6 +260,26 @@ Fichier de référence : [`backend/.env.example`](backend/.env.example). Il est 
 | `COOKIE_NAME` | `lfe_session` | Nom du cookie |
 | `COOKIE_SECURE` | `false` | **`true` derrière HTTPS** |
 
+### Messagerie
+
+| Variable | Défaut | Description |
+|---|---|---|
+| `MAIL_DRIVER` | `log` | `smtp` (envoi réel), `log` (messages écrits dans les journaux), `off` (aucun envoi) |
+| `SMTP_HOST` | — | **Obligatoire si `MAIL_DRIVER=smtp`** |
+| `SMTP_PORT` | `587` | 587 = STARTTLS, 465 = TLS implicite |
+| `SMTP_SECURE` | `false` | **`true` uniquement pour le port 465** |
+| `SMTP_USER` / `SMTP_PASSWORD` | — | Identifiants SMTP (mot de passe d'application pour Gmail) |
+| `MAIL_FROM_ADDRESS` | `no-reply@laforteresse.local` | Adresse d'expédition (domaine authentifié SPF/DKIM) |
+| `MAIL_FROM_NAME` | — | Nom affiché de l'expéditeur |
+| `MAIL_REPLY_TO` | — | Adresse de réponse proposée aux destinataires |
+| `MAIL_WORKER_ENABLED` | `true` | Expéditeur automatique de la file |
+| `MAIL_WORKER_INTERVAL_SECONDS` | `60` | Fréquence de traitement de la file |
+| `MAIL_BATCH_SIZE` | `25` | Messages traités par passage |
+| `MAIL_MAX_ATTEMPTS` | `5` | Nombre de tentatives avant échec définitif |
+
+Aucun compte payant n'est requis : tout serveur SMTP convient. Guide complet :
+[`docs/MESSAGERIE.md`](docs/MESSAGERIE.md).
+
 ### Amorçage et données de démonstration
 
 | Variable | Défaut | Description |
@@ -375,7 +401,7 @@ Base : `/api/v1`. Réponses JSON ; erreurs au format `{ "error": { "code", "mess
 | `/public` | public | `settings`, `departments[/:slug]`, `sermons[/:slug]`, `events[/:slug]`, `events/:slug/register`, `announcements`, `albums[/:slug]`, `testimonies`, `prayer-requests`, `gallery/takedown-requests` |
 | `/members` | membre approuvé | `dashboard`, `announcements`, `albums[/:slug]`, `events`, `events/:slug/register`, `departments`, `departments/:id/requests`, `departments/requests[/:id]`, `notifications`, `notifications/unread-count`, `notifications/:id/read`, `notifications/read-all`, `directory`, `testimonies`, `testimonies/mine`, `prayer-requests/mine`, `audit/mine` |
 | `/media` | admin ou média | Albums : `albums`, `albums/:id`, `albums/:id/photos`, `photos/:id`, `albums/:id/access[/:profileId]`, `albums/:id/publish`, `albums/:id/archive`, `albums/:id/download` |
-| `/admin` | admin (staff pour les départements) | `/dashboard`, `/members/*` (+ `/:id/nominations`), `/departments/*` (+ `/:id/nominations`), `/sermons/*`, `/events/*` (+ `registrations`, `export`), `/announcements/*`, `/prayer-requests/*`, `/testimonies/*`, `/takedown-requests/*`, `/finance/{contributions,expenses,summary}`, `/settings/*`, `/audit-logs` |
+| `/admin` | admin (staff pour les départements) | `/dashboard`, `/members/*` (+ `/:id/nominations`), `/departments/*` (+ `/:id/nominations`), `/sermons/*`, `/events/*` (+ `registrations`, `export`), `/announcements/*`, `/prayer-requests/*`, `/testimonies/*`, `/takedown-requests/*`, `/finance/{contributions,expenses,summary}`, `/settings/*`, `/emails/{status,campaigns,preview,broadcast,test,flush}`, `/audit-logs` |
 | `/files/:token` | signé | Sert un fichier via une URL signée à durée limitée (900 s) |
 
 Les listes paginées renvoient `{ <ressource>, pagination: { page, perPage, total, totalPages } }`, avec le nom de la ressource comme clé (`sermons`, `events`, `albums`, `testimonies`, `logs`, `items`…).
@@ -400,6 +426,34 @@ La correspondance entre rôles fonctionnels (`SUPER_ADMIN_PASTOR`, `DEPARTMENT_H
 ### Nominations et historique des fonctions
 
 Un membre nommé dans un département conserve **la date de début**, **la date de fin** et **l'intitulé de sa fonction**. Deux tables coopèrent : `department_members` porte l'affectation courante (contrôles d'accès), `department_nominations` conserve l'historique complet — y compris après la fin de la fonction ou l'archivage du département. Le tableau de bord affiche les **responsables actifs** (titulaires et adjoints) et les **départements actifs**.
+
+---
+
+## Messagerie
+
+L'application prévient les membres par e-mail, sans dépendre d'un prestataire
+particulier (tout serveur SMTP convient).
+
+| Message | Envoi |
+|---|---|
+| Adhésion approuvée / refusée (avec le motif) | automatique, immédiat |
+| Réinitialisation du mot de passe (lien 1 h, usage unique) | automatique, immédiat |
+| Nomination dans un département | automatique, immédiat |
+| Information générale (annonce, événement, nouvelle) | depuis **Administration → Messagerie** |
+
+- Les messages de compte partent toujours ; un membre peut refuser les messages
+  d'information depuis son profil (case « Je souhaite recevoir les informations de
+  l'église par e-mail », colonne `profiles.email_opt_out`).
+- Chaque message est d'abord écrit dans `email_outbox`, puis envoyé par un
+  expéditeur : une panne SMTP ne fait échouer aucune action métier, et les échecs
+  temporaires sont réessayés automatiquement (1, 2, 4, 8… minutes).
+- Les destinataires d'un message d'information sont **calculés par le serveur**
+  (membres approuvés, rôle précis ou département) : jamais une liste d'adresses
+  transmise par le navigateur.
+- Les campagnes et les envois sont tracés (`email_campaigns`, `email_outbox`,
+  journal d'audit). Les secrets SMTP ne sont jamais exposés par l'API.
+
+Guide de configuration et de dépannage : [`docs/MESSAGERIE.md`](docs/MESSAGERIE.md).
 
 ---
 

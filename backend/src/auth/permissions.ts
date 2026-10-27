@@ -15,6 +15,8 @@ export interface AuthProfile {
   status: MemberStatus;
   role: AppRole;
   consentPhotos: boolean;
+  /** Le membre refuse les e-mails d'information (les transactionnels restent envoyes). */
+  emailOptOut: boolean;
   submittedAt: Date | null;
   reviewedAt: Date | null;
   decisionNote: string | null;

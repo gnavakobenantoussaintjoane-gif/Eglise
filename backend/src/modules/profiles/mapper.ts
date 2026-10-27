@@ -15,6 +15,7 @@ export interface ProfileRow {
   status: MemberStatus;
   role: AppRole;
   consent_photos: boolean;
+  email_opt_out?: boolean;
   submitted_at: Date | string | null;
   reviewed_at: Date | string | null;
   decision_note: string | null;
@@ -43,6 +44,7 @@ export function mapProfileRow(row: ProfileRow): AuthProfile {
     status: row.status,
     role: row.role,
     consentPhotos: row.consent_photos,
+    emailOptOut: Boolean(row.email_opt_out),
     submittedAt: toDate(row.submitted_at),
     reviewedAt: toDate(row.reviewed_at),
     decisionNote: row.decision_note,
@@ -64,6 +66,8 @@ export interface PublicProfile {
   status?: MemberStatus;
   role?: AppRole;
   consentPhotos?: boolean;
+  /** Préférence d'envoi des messages d'information (jamais exposée dans l'annuaire). */
+  emailOptOut?: boolean;
   submittedAt?: string | null;
   reviewedAt?: string | null;
   decisionNote?: string | null;
@@ -98,6 +102,7 @@ export function toFullProfile(profile: AuthProfile, photoUrl: string | null): Pu
     status: profile.status,
     role: profile.role,
     consentPhotos: profile.consentPhotos,
+    emailOptOut: profile.emailOptOut,
     submittedAt: profile.submittedAt?.toISOString() ?? null,
     reviewedAt: profile.reviewedAt?.toISOString() ?? null,
     decisionNote: profile.decisionNote,

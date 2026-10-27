@@ -4,6 +4,7 @@ import { AppError } from '../../utils/errors.js';
 import { buildPagination, resolvePagination, likeTerm } from '../../utils/pagination.js';
 import { recordAudit } from '../../middlewares/audit.js';
 import { notifyProfiles } from '../../services/notifications.js';
+import { sendMembershipDecisionEmail } from '../../services/email/index.js';
 import { signedFileUrl } from '../../services/files.js';
 import type { AuthProfile } from '../../auth/permissions.js';
 import { MEMBER_STATUSES, type MemberStatus } from '../../config/constants.js';
@@ -248,6 +249,21 @@ export async function changeMemberStatus(
     body: `${messages[input.status]}${input.note ? ` Motif : ${input.note}` : ''}`,
     link: '/espace-membre',
   });
+
+  // E-mail au membre : decision d'adhesion (transactionnel).
+  // Une panne d'envoi ne doit jamais annuler la decision deja enregistree.
+  if (input.status === 'approved' || input.status === 'rejected') {
+    await sendMembershipDecisionEmail(
+      db,
+      {
+        id: targetId,
+        email: target.email,
+        fullName: `${target.first_name ?? ''} ${target.last_name ?? ''}`.trim(),
+      },
+      input.status,
+      { note: input.note ?? null },
+    );
+  }
 
   await recordAudit(db, {
     actorId: actor.id,
