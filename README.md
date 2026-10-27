@@ -470,6 +470,13 @@ En résumé :
 4. **Premier administrateur** — `npm run create-admin` avec `ADMIN_BOOTSTRAP_*`, puis retirer ces variables.
 5. **Contrôles** — `GET /api/v1/health` doit répondre `{"status":"ok",...}`, connexion admin, upload d'une photo.
 
+**Base de données de production** : projet Supabase dédié `Eglise`
+(ref `abjlyscebvaxbdojmplk`, région `eu-west-1`), avec 5 migrations appliquées
+(schéma, RLS, stockage, auth locale, durcissement des privilèges).
+
+⚠️ `SUPABASE_ANON_KEY` doit rester **vide** : le renseigner bascule toute
+l'authentification sur Supabase Auth. Voir `docs/DEPLOIEMENT.md` §3.1 bis.
+
 📖 **Guide complet : [`docs/DEPLOIEMENT.md`](docs/DEPLOIEMENT.md)** — Supabase, variables de production, Docker/Compose, Render, Netlify/Vercel, vérifications après mise en ligne, sauvegardes, retour arrière et dépannage.
 
 Le serveur **refuse de démarrer** si `DATABASE_URL` manque en production ou si `SESSION_SECRET` ressemble à une valeur d'exemple. Ne jamais committer `backend/.env` ni `backend/var/` (déjà couverts par `.gitignore`).
