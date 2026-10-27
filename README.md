@@ -13,7 +13,7 @@ Le dépôt contient une **API REST** (Node/Express + TypeScript) et une **interf
 npm install
 cp backend/.env.example backend/.env   # renseigner SESSION_SECRET
 npm run db:migrate && npm run db:seed && npm run create-admin
-npm run dev                            # API :4000 · site :5173
+npm run dev                            # site :3000 · API :4000 (proxifiée)
 ```
 
 ---
@@ -197,7 +197,7 @@ npm run dev
 
 | Service | URL |
 |---|---|
-| Site | http://localhost:5173 |
+| Site | http://localhost:3000 |
 | API | http://localhost:4000/api/v1 |
 | Contrôle de santé | http://localhost:4000/api/v1/health → `{"status":"ok","database":"pglite","storage":"local"}` |
 
@@ -216,9 +216,9 @@ Fichier de référence : [`backend/.env.example`](backend/.env.example). Il est 
 | Variable | Défaut | Description |
 |---|---|---|
 | `NODE_ENV` | `development` | `development` \| `test` \| `production` |
-| `PORT` | `4000` | Port d'écoute de l'API |
+| `PORT` | `3000` | Port d'écoute de l'API. En développement, mettre `4000` (l'interface occupe 3000). En production, l'API sert aussi l'interface : garder `3000` |
 | `API_PREFIX` | `/api/v1` | Préfixe de toutes les routes |
-| `FRONTEND_URL` | `http://localhost:5173` | Origine autorisée par défaut (CORS) |
+| `FRONTEND_URL` | `http://localhost:3000` | Origine autorisée par défaut (CORS) |
 | `CORS_ORIGINS` | — | Origines supplémentaires, séparées par des virgules |
 | `PUBLIC_API_URL` | *(vide)* | URL publique de l'API pour les liens signés. **Vide = liens relatifs** (recommandé derrière un proxy) |
 | `MAX_UPLOAD_MB` | `25` | Taille maximale d'un fichier uploadé |
@@ -375,7 +375,7 @@ Base : `/api/v1`. Réponses JSON ; erreurs au format `{ "error": { "code", "mess
 | `/public` | public | `settings`, `departments[/:slug]`, `sermons[/:slug]`, `events[/:slug]`, `events/:slug/register`, `announcements`, `albums[/:slug]`, `testimonies`, `prayer-requests`, `gallery/takedown-requests` |
 | `/members` | membre approuvé | `dashboard`, `announcements`, `albums[/:slug]`, `events`, `events/:slug/register`, `departments`, `departments/:id/requests`, `departments/requests[/:id]`, `notifications`, `notifications/unread-count`, `notifications/:id/read`, `notifications/read-all`, `directory`, `testimonies`, `testimonies/mine`, `prayer-requests/mine`, `audit/mine` |
 | `/media` | admin ou média | Albums : `albums`, `albums/:id`, `albums/:id/photos`, `photos/:id`, `albums/:id/access[/:profileId]`, `albums/:id/publish`, `albums/:id/archive`, `albums/:id/download` |
-| `/admin` | admin (staff pour les départements) | `/dashboard`, `/members/*`, `/departments/*`, `/sermons/*`, `/events/*` (+ `registrations`, `export`), `/announcements/*`, `/prayer-requests/*`, `/testimonies/*`, `/takedown-requests/*`, `/finance/{contributions,expenses,summary}`, `/settings/*`, `/audit-logs` |
+| `/admin` | admin (staff pour les départements) | `/dashboard`, `/members/*` (+ `/:id/nominations`), `/departments/*` (+ `/:id/nominations`), `/sermons/*`, `/events/*` (+ `registrations`, `export`), `/announcements/*`, `/prayer-requests/*`, `/testimonies/*`, `/takedown-requests/*`, `/finance/{contributions,expenses,summary}`, `/settings/*`, `/audit-logs` |
 | `/files/:token` | signé | Sert un fichier via une URL signée à durée limitée (900 s) |
 
 Les listes paginées renvoient `{ <ressource>, pagination: { page, perPage, total, totalPages } }`, avec le nom de la ressource comme clé (`sermons`, `events`, `albums`, `testimonies`, `logs`, `items`…).
@@ -394,6 +394,12 @@ Les listes paginées renvoient `{ <ressource>, pagination: { page, perPage, tota
 | `admin` | Accès total au back-office, y compris finances, paramètres et journal d'audit |
 
 Les permissions calculées sont exposées par la session (`isAdmin`, `isMedia`, `canAccessMembersArea`, `canManageGallery`, `canManageDepartments`) et réutilisées par l'interface pour masquer les actions non autorisées — sans jamais remplacer le contrôle serveur.
+
+La correspondance entre rôles fonctionnels (`SUPER_ADMIN_PASTOR`, `DEPARTMENT_HEAD`, `DEPARTMENT_ASSISTANT`, `MEMBER`, `PENDING_MEMBER`) et ce modèle technique, les règles d'auto-élévation interdites et le cycle de vie des nominations sont détaillés dans [`docs/ROLES_ET_PERMISSIONS.md`](docs/ROLES_ET_PERMISSIONS.md).
+
+### Nominations et historique des fonctions
+
+Un membre nommé dans un département conserve **la date de début**, **la date de fin** et **l'intitulé de sa fonction**. Deux tables coopèrent : `department_members` porte l'affectation courante (contrôles d'accès), `department_nominations` conserve l'historique complet — y compris après la fin de la fonction ou l'archivage du département. Le tableau de bord affiche les **responsables actifs** (titulaires et adjoints) et les **départements actifs**.
 
 ---
 

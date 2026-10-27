@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { getDatabase } from '../../db/client.js';
+import { toDateOnly } from '../../utils/dates.js';
 import type { AuthProfile } from '../../auth/permissions.js';
 import { getStorage } from '../../storage/index.js';
 import { uniqueSlug } from '../../utils/slug.js';
@@ -234,6 +235,23 @@ export async function archiveDepartment(id: string, actor: AuthProfile): Promise
     `update public.departments set is_active = false, archived_at = now() where id = $1`,
     [id],
   );
+  // Un departement archive ne peut plus etre pilote : les fonctions en cours sont
+  // cloturees, mais les lignes d'affectation et l'historique sont conserves.
+  await db.query(
+    `update public.department_members
+        set status = 'left', ended_on = coalesce(ended_on, current_date)
+      where department_id = $1 and status = 'active'`,
+    [id],
+  );
+  await db.query(
+    `update public.department_nominations
+        set status = 'ended',
+            ended_on = coalesce(ended_on, current_date),
+            ended_by = $2,
+            end_reason = coalesce(end_reason, 'Departement archive')
+      where department_id = $1 and status = 'active'`,
+    [id, actor.id],
+  );
   await recordAudit(db, {
     actorId: actor.id,
     actorEmail: actor.email,
@@ -250,6 +268,10 @@ export interface DepartmentMemberDto {
   city: string | null;
   role: string;
   status: string;
+  /** Date d'entree dans la fonction (periode d'exercice courante). */
+  startedOn: string | null;
+  /** Intitule libre de la fonction, si l'administrateur en a saisi un. */
+  functionTitle: string | null;
   joinedAt: string;
 }
 
@@ -262,9 +284,12 @@ export async function listDepartmentMembers(departmentId: string): Promise<Depar
     city: string | null;
     member_role: string;
     status: string;
+    started_on: string | null;
+    function_title: string | null;
     joined_at: string;
   }>(
-    `select dm.profile_id, p.first_name, p.last_name, p.city, dm.member_role, dm.status, dm.joined_at
+    `select dm.profile_id, p.first_name, p.last_name, p.city, dm.member_role, dm.status,
+            dm.started_on, dm.function_title, dm.joined_at
      from public.department_members dm
      join public.profiles p on p.id = dm.profile_id
      where dm.department_id = $1 and dm.status = 'active'
@@ -277,6 +302,8 @@ export async function listDepartmentMembers(departmentId: string): Promise<Depar
     city: row.city,
     role: row.member_role,
     status: row.status,
+    startedOn: toDateOnly(row.started_on),
+    functionTitle: row.function_title,
     joinedAt: row.joined_at,
   }));
 }

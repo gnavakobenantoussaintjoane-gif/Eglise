@@ -13,6 +13,7 @@ export async function dashboardStats() {
     members_suspended: string;
     members_incomplete: string;
     departments_active: string;
+    leaders_active: string;
     albums_total: string;
     albums_published: string;
     photos_total: string;
@@ -30,6 +31,13 @@ export async function dashboardStats() {
       (select count(*) from public.profiles where status = 'suspended')::text as members_suspended,
       (select count(*) from public.profiles where status = 'profile_incomplete')::text as members_incomplete,
       (select count(*) from public.departments where is_active and archived_at is null)::text as departments_active,
+      -- Responsables actifs : personnes distinctes, tous departements confondus.
+      (select count(distinct dm.profile_id)
+         from public.department_members dm
+         join public.departments d on d.id = dm.department_id
+        where dm.status = 'active'
+          and dm.member_role in ('leader', 'assistant')
+          and d.is_active and d.archived_at is null)::text as leaders_active,
       (select count(*) from public.albums)::text as albums_total,
       (select count(*) from public.albums where status = 'published')::text as albums_published,
       (select count(*) from public.photos)::text as photos_total,
@@ -88,7 +96,7 @@ export async function dashboardStats() {
       suspended: n(row?.members_suspended),
       incomplete: n(row?.members_incomplete),
     },
-    departments: { active: n(row?.departments_active) },
+    departments: { active: n(row?.departments_active), leadersActive: n(row?.leaders_active) },
     albums: {
       total: n(row?.albums_total),
       published: n(row?.albums_published),

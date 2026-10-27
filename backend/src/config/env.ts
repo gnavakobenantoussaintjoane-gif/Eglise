@@ -32,7 +32,7 @@ const optionalString = z
 const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-    PORT: z.coerce.number().int().positive().default(4000),
+    PORT: z.coerce.number().int().positive().default(3000),
     API_PREFIX: z.string().default('/api/v1'),
 
     FRONTEND_URL: z.string().default('http://localhost:5173'),

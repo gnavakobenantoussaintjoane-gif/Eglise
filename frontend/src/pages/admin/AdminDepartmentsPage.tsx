@@ -1,10 +1,17 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ImagePlus, Pencil, Plus, Search, Trash2, UserPlus, Users } from 'lucide-react';
+import { ChevronDown, ImagePlus, Pencil, Plus, Search, Trash2, UserPlus, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ApiError } from '../../services/api';
 import { useAuth } from '../../hooks/useAuth';
-import type { Department, DepartmentRequest, MemberListItem, Pagination } from '../../types';
+import type {
+  Department,
+  DepartmentMember,
+  DepartmentNomination,
+  DepartmentRequest,
+  MemberListItem,
+  Pagination,
+} from '../../types';
 import {
   Badge,
   Button,
@@ -17,7 +24,14 @@ import {
   Textarea,
 } from '../../components/ui';
 import { AdminHeading, TableShell } from '../../components/admin/AdminKit';
-import { formatRelative } from '../../utils/format';
+import { formatDate, formatDateRange, formatRelative } from '../../utils/format';
+
+/** Libellés lisibles des rôles internes à un département. */
+const ROLE_LABELS: Record<string, string> = {
+  leader: 'Responsable',
+  assistant: 'Adjoint',
+  member: 'Membre',
+};
 
 interface DepartmentFormState {
   id?: string;
@@ -479,12 +493,15 @@ function DepartmentMembersModal({
 }) {
   const [profileId, setProfileId] = useState('');
   const [role, setRole] = useState<'leader' | 'assistant' | 'member'>('member');
+  const [functionTitle, setFunctionTitle] = useState('');
+  const [startedOn, setStartedOn] = useState('');
   const [search, setSearch] = useState('');
+  const [showHistory, setShowHistory] = useState(false);
 
   const membersQuery = useQuery({
     queryKey: ['admin', 'department-members', department?.id],
     queryFn: ({ signal }) =>
-      api.get<{ members: { profileId: string; fullName: string; role: string; joinedAt: string }[] }>(
+      api.get<{ members: DepartmentMember[] }>(
         `/admin/departments/${department?.id}/members`,
         undefined,
         signal,
@@ -492,13 +509,45 @@ function DepartmentMembersModal({
     enabled: Boolean(department?.id),
   });
 
+  // Historique chargé uniquement à la demande : la liste est potentiellement longue.
+  const historyQuery = useQuery({
+    queryKey: ['admin', 'department-nominations', department?.id],
+    queryFn: ({ signal }) =>
+      api.get<{ nominations: DepartmentNomination[] }>(
+        `/admin/departments/${department?.id}/nominations`,
+        undefined,
+        signal,
+      ),
+    enabled: Boolean(department?.id) && showHistory,
+  });
+
+  const queryClient = useQueryClient();
+
+  const refresh = () => {
+    void membersQuery.refetch();
+    void queryClient.invalidateQueries({
+      queryKey: ['admin', 'department-nominations', department?.id],
+    });
+    onChanged();
+  };
+
   const addMutation = useMutation({
-    mutationFn: () => api.post(`/admin/departments/${department?.id}/members`, { profileId, role }),
+    mutationFn: () =>
+      api.post(`/admin/departments/${department?.id}/members`, {
+        profileId,
+        role,
+        functionTitle: functionTitle.trim() || undefined,
+        startedOn: startedOn || undefined,
+      }),
     onSuccess: () => {
-      toast.success('Membre ajouté.');
+      toast.success('Nomination enregistrée.');
       setProfileId('');
-      void membersQuery.refetch();
-      onChanged();
+      setFunctionTitle('');
+      setStartedOn('');
+      void queryClient.invalidateQueries({
+        queryKey: ['admin', 'department-nominations', department?.id],
+      });
+      refresh();
     },
     onError: (error) => toast.error(error instanceof ApiError ? error.message : 'Ajout impossible.'),
   });
@@ -507,19 +556,23 @@ function DepartmentMembersModal({
     mutationFn: (memberId: string) =>
       api.delete(`/admin/departments/${department?.id}/members/${memberId}`),
     onSuccess: () => {
-      toast.success('Membre retiré.');
-      void membersQuery.refetch();
-      onChanged();
+      toast.success('Fin de fonction enregistrée. L’historique est conservé.');
+      refresh();
     },
     onError: (error) => toast.error(error instanceof ApiError ? error.message : 'Action impossible.'),
   });
 
+  const activeMembers = (membersQuery.data?.members ?? []).filter((member) =>
+    member.fullName.toLowerCase().includes(search.toLowerCase()),
+  );
+  const nominations = historyQuery.data?.nominations ?? [];
+
   return (
     <Modal open={Boolean(department)} onClose={onClose} title={`Équipe — ${department?.name ?? ''}`} size="lg">
       <div className="space-y-4">
-        <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto] sm:items-end">
+        <div className="grid gap-2 sm:grid-cols-2">
           <Select
-            label="Ajouter un membre approuvé"
+            label="Membre approuvé"
             placeholder="Choisir un membre"
             options={approvedMembers.map((member) => ({
               value: member.id,
@@ -529,7 +582,7 @@ function DepartmentMembersModal({
             onChange={(event) => setProfileId(event.target.value)}
           />
           <Select
-            label="Rôle"
+            label="Rôle dans le département"
             options={[
               { value: 'member', label: 'Membre' },
               { value: 'assistant', label: 'Assistant' },
@@ -538,13 +591,27 @@ function DepartmentMembersModal({
             value={role}
             onChange={(event) => setRole(event.target.value as 'leader' | 'assistant' | 'member')}
           />
-          <Button
-            onClick={() => (profileId ? addMutation.mutate() : toast.error('Choisissez un membre.'))}
-            loading={addMutation.isPending}
-          >
-            <UserPlus className="h-4 w-4" aria-hidden="true" /> Ajouter
-          </Button>
+          <Input
+            label="Intitulé de la fonction (facultatif)"
+            placeholder="Responsable louange"
+            value={functionTitle}
+            maxLength={120}
+            onChange={(event) => setFunctionTitle(event.target.value)}
+          />
+          <Input
+            label="Date de début (facultatif)"
+            type="date"
+            value={startedOn}
+            onChange={(event) => setStartedOn(event.target.value)}
+            hint="La date du jour est utilisée si le champ est vide."
+          />
         </div>
+        <Button
+          onClick={() => (profileId ? addMutation.mutate() : toast.error('Choisissez un membre.'))}
+          loading={addMutation.isPending}
+        >
+          <UserPlus className="h-4 w-4" aria-hidden="true" /> Nommer
+        </Button>
 
         <Input
           label="Filtrer l'équipe"
@@ -555,36 +622,90 @@ function DepartmentMembersModal({
 
         {membersQuery.isLoading ? (
           <p className="text-sm text-muted">Chargement…</p>
-        ) : (membersQuery.data?.members ?? []).length === 0 ? (
+        ) : activeMembers.length === 0 ? (
           <p className="text-sm text-muted">Aucun membre actif dans ce département.</p>
         ) : (
           <ul className="divide-y divide-line rounded-xl border border-line">
-            {(membersQuery.data?.members ?? [])
-              .filter((member) => member.fullName.toLowerCase().includes(search.toLowerCase()))
-              .map((member) => (
-                <li key={member.profileId} className="flex items-center justify-between gap-2 px-4 py-2.5">
-                  <div>
-                    <p className="text-sm font-medium text-ink">{member.fullName}</p>
-                    <p className="text-xs text-muted">
-                      {member.role} · depuis {formatRelative(member.joinedAt)}
-                    </p>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    loading={removeMutation.isPending}
-                    onClick={() => removeMutation.mutate(member.profileId)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" aria-hidden="true" /> Retirer
-                  </Button>
-                </li>
-              ))}
+            {activeMembers.map((member) => (
+              <li key={member.profileId} className="flex items-center justify-between gap-2 px-4 py-2.5">
+                <div>
+                  <p className="text-sm font-medium text-ink">{member.fullName}</p>
+                  <p className="text-xs text-muted">
+                    {member.functionTitle || ROLE_LABELS[member.role] || member.role}
+                    {member.startedOn
+                      ? ` · depuis le ${formatDate(member.startedOn)}`
+                      : ` · depuis ${formatRelative(member.joinedAt)}`}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  loading={removeMutation.isPending}
+                  onClick={() => removeMutation.mutate(member.profileId)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" aria-hidden="true" /> Mettre fin
+                </Button>
+              </li>
+            ))}
           </ul>
         )}
 
+        <div className="rounded-xl border border-line">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm font-medium text-ink"
+            onClick={() => setShowHistory((value) => !value)}
+            aria-expanded={showHistory}
+          >
+            Historique des nominations
+            <ChevronDown
+              className={`h-4 w-4 text-muted transition-transform ${showHistory ? 'rotate-180' : ''}`}
+              aria-hidden="true"
+            />
+          </button>
+          {showHistory && (
+            <div className="border-t border-line px-4 py-3">
+              {historyQuery.isLoading ? (
+                <p className="text-sm text-muted">Chargement…</p>
+              ) : nominations.length === 0 ? (
+                <p className="text-sm text-muted">Aucune nomination enregistrée.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {nominations.map((nomination) => (
+                    <li key={nomination.id} className="text-sm">
+                      <span className="font-medium text-ink">{nomination.fullName}</span>
+                      <span className="text-muted">
+                        {' — '}
+                        {nomination.functionTitle ||
+                          ROLE_LABELS[nomination.memberRole] ||
+                          nomination.memberRole}
+                        {' · '}
+                        {formatDateRange(nomination.startedOn, nomination.endedOn)}
+                      </span>
+                      {nomination.status === 'active' ? (
+                        <Badge tone="success" className="ml-2">
+                          En fonction
+                        </Badge>
+                      ) : (
+                        <Badge tone="neutral" className="ml-2">
+                          Terminée
+                        </Badge>
+                      )}
+                      {nomination.endReason && (
+                        <p className="text-xs text-muted">Motif : {nomination.endReason}</p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+
         <p className="inline-flex items-center gap-1.5 text-xs text-muted">
           <Search className="h-3.5 w-3.5" aria-hidden="true" />
-          Seuls les membres dont l’inscription est approuvée peuvent être ajoutés.
+          Seuls les membres dont l’inscription est approuvée peuvent être nommés. Une fin de
+          fonction conserve la ligne d’historique.
         </p>
       </div>
     </Modal>

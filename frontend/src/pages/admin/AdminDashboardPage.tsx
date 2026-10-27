@@ -9,6 +9,8 @@ import {
   Image as ImageIcon,
   MessageSquareQuote,
   ShieldAlert,
+  UserCog,
+  UsersRound,
   UserCheck,
   Users,
 } from 'lucide-react';
@@ -62,6 +64,18 @@ export function AdminDashboardPage() {
         <StatCard label="Événements à venir" value={data.events.upcoming} icon={<CalendarDays className="h-5 w-5" aria-hidden="true" />} />
         <StatCard label="Prières à traiter" value={data.prayerRequests.new} tone="warning" icon={<MessageSquareQuote className="h-5 w-5" aria-hidden="true" />} />
         <StatCard label="Témoignages à modérer" value={data.testimonies.pending} tone="warning" icon={<Bell className="h-5 w-5" aria-hidden="true" />} />
+        <StatCard
+          label="Responsables actifs"
+          value={data.departments.leadersActive}
+          hint="Titulaires et adjoints en fonction"
+          icon={<UserCog className="h-5 w-5" aria-hidden="true" />}
+        />
+        <StatCard
+          label="Départements actifs"
+          value={data.departments.active}
+          hint="Hors départements archivés"
+          icon={<UsersRound className="h-5 w-5" aria-hidden="true" />}
+        />
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
