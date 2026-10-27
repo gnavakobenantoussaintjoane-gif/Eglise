@@ -1,5 +1,6 @@
 import nodemailer, { type Transporter } from 'nodemailer';
 import { env, isProduction, isTest } from '../../config/env.js';
+import { logger } from '../../utils/logger.js';
 
 /**
  * Transport d'envoi des e-mails.
@@ -96,7 +97,7 @@ class LogTransport implements MailTransport {
 
   async send(message: OutgoingMessage): Promise<SendResult> {
     const id = `log-${Date.now()}`;
-    console.log(
+    logger.info(
       `[mail] (mode log) a=${message.to} sujet="${message.subject}" taille=${message.text.length}o id=${id}`,
     );
     return { messageId: id };

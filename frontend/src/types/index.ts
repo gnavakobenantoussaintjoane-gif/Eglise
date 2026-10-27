@@ -453,6 +453,7 @@ export interface MailStatus {
 export interface EmailCampaign {
   id: string;
   subject: string;
+  /** `all_members` est un alias historique de `approved`, conservé en lecture. */
   audience: 'approved' | 'all_members' | 'role' | 'department';
   audienceDetail: string | null;
   recipients: number;

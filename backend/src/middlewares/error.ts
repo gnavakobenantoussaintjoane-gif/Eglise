@@ -2,6 +2,7 @@ import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { ZodError } from 'zod';
 import { AppError } from '../utils/errors.js';
 import { isProduction } from '../config/env.js';
+import { logger } from '../utils/logger.js';
 
 export const asyncHandler =
   <T extends RequestHandler>(handler: T): RequestHandler =>
@@ -67,12 +68,12 @@ export function errorHandler(
   }
 
   if (!appError) {
-    console.error('[api] erreur non geree', error);
+    logger.error('[api] erreur non geree', error);
     appError = AppError.internal();
   }
 
   if (appError.status >= 500 && !isProduction) {
-    console.error(`[api] ${req.method} ${req.originalUrl}`, error);
+    logger.error(`[api] ${req.method} ${req.originalUrl}`, error);
   }
 
   res.status(appError.status).json({

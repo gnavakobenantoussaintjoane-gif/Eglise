@@ -135,12 +135,15 @@ Le seed de démonstration ne doit **jamais** tourner en production (`SEED_DEMO_D
 
 ```bash
 DATABASE_URL="postgresql://…" \
-ADMIN_BOOTSTRAP_EMAIL="admin@mon-eglise.ci" \
-ADMIN_BOOTSTRAP_PASSWORD="MotDePasseSolide2026!" \
-npm run create-admin
+npm run init-super-admin -- --email pasteur@mon-eglise.ci
 ```
 
-Le mot de passe doit contenir au moins 10 caractères, une lettre et un chiffre. Une fois le compte créé, **retirer** `ADMIN_BOOTSTRAP_PASSWORD` de l'environnement de production.
+Le mot de passe est saisi à l'invite masquée (au moins 10 caractères, une
+lettre et un chiffre). Pour un administrateur supplémentaire, `npm run
+create-admin -- <email>` applique les mêmes règles. Aucune de ces deux commandes
+n'accepte le mot de passe en argument : ne définissez pas non plus
+`ADMIN_BOOTSTRAP_PASSWORD` en production, cette variable n'est là que pour des
+automatisations ponctuelles et doit être retirée aussitôt.
 
 ---
 
@@ -166,7 +169,7 @@ Recommandées :
 | `AUTO_MIGRATE` | `true` pour appliquer les migrations au démarrage, `false` si vous préférez les appliquer manuellement |
 | `SEED_DEMO_DATA` | `false` |
 | `MAX_UPLOAD_MB` | `25` (adapter selon l'hébergeur) |
-| `LOG_LEVEL` | `info` |
+| `LOG_LEVEL` | `info` | Seuil appliqué par le journal du serveur (`debug`, `info`, `warn`, `error`). En production, `info` évite de journaliser les détails de débogage. |
 
 > Le serveur **refuse de démarrer** si `DATABASE_URL` manque en production ou si `SESSION_SECRET` ressemble à une valeur d'exemple (`change_me`, `example`, `placeholder`). C'est volontaire.
 

@@ -524,6 +524,119 @@ describe('API - messagerie', () => {
       .expect(200);
   });
 
+  it('rend le lien de desinscription utilisable sans etre connecte', async () => {
+    // 1. Un message d'information part : il contient un lien de desinscription.
+    const transport = await resetMailbox();
+    await adminAgent
+      .post(`${API}/admin/emails/broadcast`)
+      .send({
+        subject: 'Nouvelles du mois',
+        body: 'Retrouvez les nouvelles de la communaute pour ce mois.',
+        audience: 'approved',
+        sendNow: true,
+      })
+      .expect(201);
+
+    const message = transport.sent.find((entry) => entry.to === DESTINATAIRE.email);
+    expect(message).toBeTruthy();
+    const lien = /href="([^"]*\/desinscription\?token=[^"]+)"/.exec(message?.html ?? '');
+    expect(lien).toBeTruthy();
+    const token = decodeURIComponent(new URL(lien?.[1] ?? '').searchParams.get('token') ?? '');
+    expect(token).toContain('.');
+
+    // 2. La verification se fait sans session (page publique).
+    const verification = await request(app)
+      .get(`${API}/public/unsubscribe`)
+      .query({ token })
+      .expect(200);
+    expect(verification.body.valid).toBe(true);
+    expect(verification.body.alreadyUnsubscribed).toBe(false);
+    // L'adresse complete n'est jamais renvoyee a la page publique.
+    expect(verification.body.maskedEmail).toContain('@');
+    expect(verification.body.maskedEmail).not.toContain(DESTINATAIRE.email);
+
+    // 3. La desinscription s'applique, egalement sans session.
+    const result = await request(app)
+      .post(`${API}/public/unsubscribe`)
+      .send({ token })
+      .expect(200);
+    expect(result.body.changed).toBe(true);
+    expect(result.body.maskedEmail).toBe(verification.body.maskedEmail);
+
+    const { getDatabase } = await import('../src/db/client.js');
+    const { rows } = await getDatabase().query<{ email_opt_out: boolean }>(
+      'select email_opt_out from public.profiles where id = $1',
+      [destinataireId],
+    );
+    expect(rows[0]?.email_opt_out).toBe(true);
+
+    // 4. L'action est journalisee dans l'audit.
+    const logs = await adminAgent.get(`${API}/admin/audit-logs?perPage=50`).expect(200);
+    const entry = logs.body.logs.find(
+      (row: { action: string; entityId: string }) =>
+        row.action === 'email.unsubscribe' && row.entityId === destinataireId,
+    );
+    expect(entry).toBeTruthy();
+
+    // 5. Le second clic est sans effet (idempotence).
+    const again = await request(app)
+      .post(`${API}/public/unsubscribe`)
+      .send({ token })
+      .expect(200);
+    expect(again.body.changed).toBe(false);
+
+    // Retour a l'etat initial pour les scenarios suivants.
+    await destinataireAgent
+      .patch(`${API}/auth/profile`)
+      .send({ emailOptOut: false })
+      .expect(200);
+  });
+
+  it('refuse un lien de desinscription altere', async () => {
+    const { createUnsubscribeToken } = await import('../src/services/email/unsubscribe.js');
+    const token = createUnsubscribeToken(destinataireId);
+    // Une seule lettre changee dans la signature invalide le jeton.
+    const altere = `${token.slice(0, -1)}${token.endsWith('A') ? 'B' : 'A'}`;
+
+    await request(app).get(`${API}/public/unsubscribe`).query({ token: altere }).expect(400);
+    await request(app).post(`${API}/public/unsubscribe`).send({ token: altere }).expect(400);
+    // Jeton trop court : refuse par la validation avant tout traitement.
+    await request(app).get(`${API}/public/unsubscribe`).query({ token: 'court' }).expect(422);
+  });
+
+  it('ne permet pas de desinscrire un profil avec le jeton d un autre', async () => {
+    const { getDatabase } = await import('../src/db/client.js');
+    const db = getDatabase();
+    const { createUnsubscribeToken } = await import('../src/services/email/unsubscribe.js');
+
+    const { rows } = await db.query<{ id: string }>(
+      'select id from public.profiles where email = $1',
+      ['admin.test@laforteresse.local'],
+    );
+    const adminId = rows[0]?.id ?? '';
+    expect(adminId).not.toBe('');
+
+    // Le jeton du membre est reutilise en remplacant l'identifiant : la
+    // signature ne correspond plus, la desinscription est refusee.
+    const membreToken = createUnsubscribeToken(destinataireId);
+    const [payload, signature] = membreToken.split('.');
+    const falsifie = Buffer.from(
+      `${adminId}:${Buffer.from(payload ?? '', 'base64url').toString('utf8').split(':')[1]}`,
+      'utf8',
+    ).toString('base64url');
+
+    await request(app)
+      .post(`${API}/public/unsubscribe`)
+      .send({ token: `${falsifie}.${signature}` })
+      .expect(400);
+
+    const after = await db.query<{ email_opt_out: boolean }>(
+      'select email_opt_out from public.profiles where id = $1',
+      [adminId],
+    );
+    expect(after.rows[0]?.email_opt_out).toBe(false);
+  });
+
   it('envoie un message d information aux membres approuves', async () => {
     const transport = await resetMailbox();
 
@@ -553,6 +666,20 @@ describe('API - messagerie', () => {
           campaign.subject === 'Culte special dimanche' && campaign.sent > 0,
       ),
     ).toBe(true);
+  });
+
+  it('accepte encore l audience historique all_members', async () => {
+    // Alias de `approved`, conserve pour ne pas casser les integrations.
+    const res = await adminAgent
+      .post(`${API}/admin/emails/broadcast`)
+      .send({
+        subject: 'Information historique',
+        body: 'Message envoye via l alias historique de l audience.',
+        audience: 'all_members',
+        sendNow: false,
+      })
+      .expect(201);
+    expect(res.body.recipients).toBeGreaterThanOrEqual(0);
   });
 
   it('refuse un message d information aux membres simples', async () => {

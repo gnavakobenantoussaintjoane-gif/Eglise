@@ -16,6 +16,8 @@ import {
   getMailTransport,
   type OutgoingMessage,
 } from './transport.js';
+import { createUnsubscribeToken } from './unsubscribe.js';
+import { logger } from '../../utils/logger.js';
 
 export { closeMailTransport };
 
@@ -54,10 +56,16 @@ export interface OutboxStats {
   lastError: string | null;
 }
 
-/** Adresse de desinscription incluse dans les messages d'information. */
+/**
+ * Lien de desinscription inclus dans les messages d'information.
+ *
+ * Le jeton est signe : la page peut donc desinscrire sans exiger de connexion,
+ * sans qu'un tiers puisse desinscrire quelqu'un d'autre en devinant un
+ * identifiant.
+ */
 export function unsubscribeUrl(profileId: string | null | undefined): string | null {
   if (!profileId) return null;
-  return `${env.FRONTEND_URL}/espace-membre/profil?desinscription=${profileId}`;
+  return `${env.FRONTEND_URL}/desinscription?token=${encodeURIComponent(createUnsubscribeToken(profileId))}`;
 }
 
 /** Ecrit un ou plusieurs messages dans la file, en une seule requete. */
@@ -168,7 +176,7 @@ export async function dispatchPending(
       );
       report.sent += 1;
       if (transport.name === 'log') {
-        console.log(`[mail] envoye (log) a ${row.recipient_email} — ${result.messageId}`);
+        logger.info(`[mail] envoye (log) a ${row.recipient_email} — ${result.messageId}`);
       }
     } catch (error) {
       report.failed += 1;
@@ -186,7 +194,7 @@ export async function dispatchPending(
           where id = $1`,
         [row.id, finalFailure ? 'failed' : 'pending', attempts, message_.slice(0, 500), delayMinutes],
       );
-      console.error(
+      logger.error(
         `[mail] echec ${finalFailure ? 'definitif' : 'temporaire'} a=${row.recipient_email} tentative=${attempts} : ${message_}`,
       );
     }
@@ -256,7 +264,7 @@ export async function sendTransactional(
     // Envoi immediat : l'utilisateur attend ce message (lien de reinitialisation).
     await dispatchPending(5);
   } catch (error) {
-    console.error('[mail] mise en file impossible', error);
+    logger.error('[mail] mise en file impossible', error);
   }
 }
 
@@ -269,7 +277,7 @@ async function branding() {
     return brandingFrom(await getSettingsRow());
   } catch (error) {
     // Sans parametres accessibles, le modele utilise ses valeurs par defaut.
-    console.error('[mail] parametres de l eglise illisibles', error);
+    logger.error('[mail] parametres de l eglise illisibles', error);
     return brandingFrom(null);
   }
 }
@@ -358,12 +366,12 @@ async function tick(): Promise<void> {
   try {
     const report = await dispatchPending();
     if (report.sent > 0 || report.failed > 0) {
-      console.log(
+      logger.info(
         `[mail] file : ${report.sent} envoye(s), ${report.failed} en echec, ${report.attempted} traite(s)`,
       );
     }
   } catch (error) {
-    console.error('[mail] worker : erreur de traitement', error);
+    logger.error('[mail] worker : erreur de traitement', error);
   } finally {
     running = false;
   }
@@ -377,18 +385,18 @@ async function tick(): Promise<void> {
 export function startMailWorker(): void {
   if (isTest || timer) return;
   if (!env.MAIL_WORKER_ENABLED || env.MAIL_DRIVER === 'off') {
-    console.log('[mail] worker desactive (MAIL_WORKER_ENABLED=false ou MAIL_DRIVER=off)');
+    logger.info('[mail] worker desactive (MAIL_WORKER_ENABLED=false ou MAIL_DRIVER=off)');
     return;
   }
   const intervalMs = env.MAIL_WORKER_INTERVAL_SECONDS * 1000;
   timer = setInterval(() => void tick(), intervalMs);
   // Le minuteur ne doit pas empecher l'arret du processus.
   timer.unref();
-  console.log(
+  logger.info(
     `[mail] worker actif : envoi toutes les ${env.MAIL_WORKER_INTERVAL_SECONDS}s (mode ${env.MAIL_DRIVER})`,
   );
   if (isProduction && env.MAIL_DRIVER !== 'smtp') {
-    console.warn(
+    logger.warn(
       '[mail] ATTENTION : MAIL_DRIVER n est pas « smtp » en production — aucun e-mail ne sera reellement envoye.',
     );
   }

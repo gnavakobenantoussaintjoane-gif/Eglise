@@ -23,6 +23,10 @@ import { getSermon, listSermons, sermonQuerySchema } from '../content/sermons.js
 import { getDatabase } from '../../db/client.js';
 import { recordAudit, clientIp } from '../../middlewares/audit.js';
 import { AppError } from '../../utils/errors.js';
+import {
+  inspectUnsubscribeToken,
+  unsubscribeFromToken,
+} from '../../services/email/unsubscribe.js';
 
 export const publicRouter = Router();
 
@@ -203,5 +207,73 @@ publicRouter.post(
       message:
         'Votre demande de retrait a ete enregistree. Un administrateur la traitera rapidement.',
     });
+  }),
+);
+
+/* -------------------------------------------------------------------------- */
+/* Desinscription des messages d'information                                   */
+/* -------------------------------------------------------------------------- */
+
+const unsubscribeTokenSchema = z.object({
+  token: z.string().trim().min(10).max(500),
+});
+
+/**
+ * Verification du lien de desinscription : ne modifie rien.
+ * Utilisee par la page publique pour afficher l'adresse concernee avant
+ * confirmation (un lien ouvert par un antivirus ne desinscrit personne).
+ */
+publicRouter.get(
+  '/unsubscribe',
+  validate({ query: unsubscribeTokenSchema }),
+  asyncHandler(async (req, res) => {
+    const { token } = queryOf<{ token: string }>(req);
+    try {
+      const target = await inspectUnsubscribeToken(token);
+      res.json({
+        valid: true,
+        maskedEmail: target.maskedEmail,
+        alreadyUnsubscribed: target.alreadyUnsubscribed,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Lien invalide.';
+      res.status(400).json({ valid: false, error: { code: 'INVALID_TOKEN', message } });
+    }
+  }),
+);
+
+/**
+ * Desinscription effective (POST uniquement, action volontaire).
+ * Le jeton porte la signature : inutile d'etre connecte.
+ */
+publicRouter.post(
+  '/unsubscribe',
+  publicWriteLimiter,
+  validate({ body: unsubscribeTokenSchema }),
+  asyncHandler(async (req, res) => {
+    const { token } = bodyOf<{ token: string }>(req);
+    try {
+      const { target, changed } = await unsubscribeFromToken(token);
+      const db = getDatabase();
+      await recordAudit(db, {
+        actorId: target.profileId,
+        action: 'email.unsubscribe',
+        entityType: 'profile',
+        entityId: target.profileId,
+        metadata: { changed },
+        ip: clientIp(req.ip),
+      });
+      res.json({
+        ok: true,
+        changed,
+        maskedEmail: target.maskedEmail,
+        message: changed
+          ? 'Vous ne recevrez plus les messages d information de l eglise.'
+          : 'Vous etiez deja desinscrit des messages d information.',
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Lien invalide.';
+      throw AppError.badRequest(message);
+    }
   }),
 );
