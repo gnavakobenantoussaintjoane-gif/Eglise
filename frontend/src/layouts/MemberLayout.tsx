@@ -15,6 +15,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useChurchSettings } from '../hooks/useChurchSettings';
 import { Logo } from '../components/layout/Logo';
 import { UserMenu } from '../components/layout/UserMenu';
+import { RestrictionNotice } from '../components/members/RestrictionNotice';
 import { Badge } from '../components/ui';
 import { cn } from '../utils/cn';
 
@@ -118,6 +119,7 @@ export function MemberLayout() {
               </NavLink>
             ))}
           </nav>
+          <RestrictionNotice />
           <Outlet />
         </div>
       </div>

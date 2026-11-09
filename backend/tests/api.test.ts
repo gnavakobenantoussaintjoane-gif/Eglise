@@ -413,6 +413,212 @@ describe('API - permissions sensibles et historique des nominations', () => {
  * Les tests utilisent un transport memoire (`MemoryTransport`) : aucun message
  * ne quitte la machine, mais le contenu produit est verifie exactement.
  */
+describe('API - restrictions individuelles', () => {
+  const MEMBRE = {
+    firstName: 'Ruth',
+    lastName: 'Assi',
+    email: 'ruth.assi@test.local',
+    password: 'Restriction2026!',
+  };
+
+  let membreAgent: ReturnType<typeof request.agent>;
+  let membreId = '';
+  let adminId = '';
+  let secondAdminId = '';
+  let slugEvenement = '';
+
+  beforeAll(async () => {
+    membreAgent = request.agent(app);
+    await membreAgent.post(`${API}/auth/register`).send(MEMBRE).expect(201);
+    await membreAgent
+      .patch(`${API}/auth/profile`)
+      .send({ city: 'Abidjan', phone: '+225 07 00 00 00 04', profession: 'Infirmiere' })
+      .expect(200);
+    await membreAgent.post(`${API}/auth/profile/submit`).expect(200);
+    await approveProfile(MEMBRE.email);
+    await membreAgent
+      .post(`${API}/auth/login`)
+      .send({ email: MEMBRE.email, password: MEMBRE.password })
+      .expect(200);
+
+    const { getDatabase } = await import('../src/db/client.js');
+    const { rows } = await getDatabase().query<{ id: string }>(
+      'select id from public.profiles where email = $1',
+      [MEMBRE.email],
+    );
+    membreId = rows[0]?.id ?? '';
+    const adminRows = await getDatabase().query<{ id: string }>(
+      'select id from public.profiles where role = $1 limit 1',
+      ['admin'],
+    );
+    adminId = adminRows.rows[0]?.id ?? '';
+
+    // Un second administrateur : le compte courant ne doit pas pouvoir
+    // neutraliser un autre administrateur.
+    await request(app)
+      .post(`${API}/auth/register`)
+      .send({
+        firstName: 'Second',
+        lastName: 'Admin',
+        email: 'second.admin@test.local',
+        password: 'SecondAdmin2026!',
+      })
+      .expect(201);
+    await getDatabase().query(
+      "update public.profiles set role = 'admin', status = 'approved' where email = $1",
+      ['second.admin@test.local'],
+    );
+    const second = await getDatabase().query<{ id: string }>(
+      'select id from public.profiles where email = $1',
+      ['second.admin@test.local'],
+    );
+    secondAdminId = second.rows[0]?.id ?? '';
+    expect(secondAdminId).toBeTruthy();
+
+    // Un evenement ouvert aux inscriptions sert de support au test.
+    const evenement = await adminAgent
+      .post(`${API}/admin/events`)
+      .send({
+        title: 'Soiree de priere des restrictions',
+        startsAt: '2030-03-15T18:00:00.000Z',
+        registrationOpen: true,
+        isPublished: true,
+      })
+      .expect(201);
+    slugEvenement = evenement.body.slug ?? evenement.body.event?.slug ?? '';
+    expect(slugEvenement).toBeTruthy();
+  }, 60_000);
+
+  it('refuse l acces a la gestion des restrictions pour un simple membre', async () => {
+    await membreAgent.get(`${API}/admin/members/${membreId}/restrictions`).expect(403);
+    await membreAgent
+      .put(`${API}/admin/members/${membreId}/restrictions`)
+      .send({ codes: [] })
+      .expect(403);
+  });
+
+  it('applique plusieurs restrictions avec un motif commun', async () => {
+    const res = await adminAgent
+      .put(`${API}/admin/members/${membreId}/restrictions`)
+      .send({
+        codes: ['event_registration', 'testimony_submission', 'gallery_access', 'directory_listing'],
+        reason: 'Propos blessants envers un autre membre.',
+      })
+      .expect(200);
+
+    expect(res.body.added).toEqual(
+      expect.arrayContaining(['event_registration', 'testimony_submission']),
+    );
+    expect(res.body.restrictions).toHaveLength(4);
+    expect(res.body.restrictions[0].reason).toBe('Propos blessants envers un autre membre.');
+    // Les libelles francais accompagnent les codes pour l interface.
+    expect(res.body.restrictions[0].label).toBeTruthy();
+  });
+
+  it('bloque reellement les actions restreintes', async () => {
+    const inscription = await membreAgent
+      .post(`${API}/members/events/${slugEvenement}/register`)
+      .send({ fullName: 'Ruth Assi', email: MEMBRE.email, seats: 1 })
+      .expect(403);
+    expect(inscription.body.error?.message ?? inscription.body.message).toContain('Motif');
+
+    const temoignage = await membreAgent
+      .post(`${API}/members/testimonies`)
+      .send({
+        title: 'Un temoignage',
+        body: 'Le Seigneur a repondu a ma priere cette annee, gloire a son nom.',
+      })
+      .expect(403);
+    expect(temoignage.body.error?.message ?? temoignage.body.message).toContain('administration');
+
+    await membreAgent.get(`${API}/members/albums`).expect(403);
+  });
+
+  it('retire le membre restreint de l annuaire des membres', async () => {
+    const res = await adminAgent.get(`${API}/members/directory`).expect(200);
+    const emails = (res.body.members ?? res.body.directory ?? []).map(
+      (entry: { email?: string; id?: string }) => entry.email ?? entry.id,
+    );
+    expect(emails).not.toContain(MEMBRE.email);
+    expect(emails).not.toContain(membreId);
+  });
+
+  it('expose le motif au membre concerne dans sa session', async () => {
+    const res = await membreAgent.get(`${API}/auth/session`).expect(200);
+    expect(res.body.restrictions).toHaveLength(4);
+    const codes = res.body.restrictions.map((entry: { code: string }) => entry.code);
+    expect(codes).toContain('testimony_submission');
+    expect(res.body.restrictions[0].reason).toBe('Propos blessants envers un autre membre.');
+  });
+
+  it('leve une restriction et rend la possibilite', async () => {
+    const res = await adminAgent
+      .put(`${API}/admin/members/${membreId}/restrictions`)
+      .send({ codes: ['gallery_access'], reason: 'Recadrage en cours.' })
+      .expect(200);
+    expect(res.body.removed).toEqual(
+      expect.arrayContaining(['event_registration', 'testimony_submission', 'directory_listing']),
+    );
+    expect(res.body.restrictions).toHaveLength(1);
+
+    await membreAgent
+      .post(`${API}/members/testimonies`)
+      .send({
+        title: 'Rehabilitation',
+        body: 'Merci a l equipe pour son ecoute et sa patience durant cette etape.',
+      })
+      .expect(201);
+  });
+
+  it('vide toutes les restrictions', async () => {
+    const res = await adminAgent
+      .put(`${API}/admin/members/${membreId}/restrictions`)
+      .send({ codes: [] })
+      .expect(200);
+    expect(res.body.restrictions).toHaveLength(0);
+
+    const session = await membreAgent.get(`${API}/auth/session`).expect(200);
+    expect(session.body.restrictions).toHaveLength(0);
+    await membreAgent.get(`${API}/members/albums`).expect(200);
+  });
+
+  it('interdit de restreindre un administrateur', async () => {
+    const autreAdmin = await adminAgent
+      .put(`${API}/admin/members/${secondAdminId}/restrictions`)
+      .send({ codes: ['gallery_access'], reason: 'Tentative de neutralisation.' })
+      .expect(400);
+    expect(autreAdmin.body.error?.message ?? autreAdmin.body.message).toContain('administrateur');
+
+    const soiMeme = await adminAgent
+      .put(`${API}/admin/members/${adminId}/restrictions`)
+      .send({ codes: ['gallery_access'], reason: 'Tentative sur soi-meme.' })
+      .expect(400);
+    expect(soiMeme.body.error?.message ?? soiMeme.body.message).toContain('propre compte');
+  });
+
+  it('refuse un code de restriction inconnu', async () => {
+    await adminAgent
+      .put(`${API}/admin/members/${membreId}/restrictions`)
+      .send({ codes: ['suppression_du_compte'] })
+      .expect(422);
+  });
+
+  it('journalise chaque changement dans l audit', async () => {
+    const res = await adminAgent
+      .get(`${API}/admin/audit-logs`)
+      .query({ action: 'member.restrictions', perPage: 20 })
+      .expect(200);
+    const actions = res.body.logs.map((entry: { action: string }) => entry.action);
+    expect(actions.length).toBeGreaterThan(0);
+    expect(actions).toContain('member.restrictions');
+
+    // Les codes ajoutes et retires sont conserves pour l'enquete interne.
+    const dernier = res.body.logs[0];
+    expect(dernier.entityId).toBe(membreId);
+    expect(dernier.metadata).toHaveProperty('added');
+  });
+});
+
 describe('API - messagerie', () => {
   const DESTINATAIRE = {
     firstName: 'Yao',
