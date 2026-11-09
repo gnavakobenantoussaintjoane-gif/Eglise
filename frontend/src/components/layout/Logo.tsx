@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { cn } from '../../utils/cn';
 
@@ -23,6 +24,10 @@ export function LogoMark({ className }: { className?: string }) {
   );
 }
 
+/** Logo officiel de l'église, embarqué avec l'application. */
+export const BRAND_LOGO_MARK = '/brand/logo-mark.png';
+export const BRAND_LOGO = '/brand/logo.png';
+
 export function Logo({
   name,
   slogan,
@@ -36,16 +41,29 @@ export function Logo({
   className?: string;
   inverted?: boolean;
 }) {
+  // Si le fichier image est absent (déploiement incomplet, réseau coupé), le
+  // monogramme vectoriel prend le relais : le nom reste lisible.
+  const [imageFailed, setImageFailed] = useState(false);
+
   return (
     <Link
       to="/"
       className={cn('group inline-flex items-center gap-3 rounded-xl', className)}
       aria-label={`${name} — accueil`}
     >
-      {logoUrl ? (
-        <img src={logoUrl} alt="" className="h-10 w-10 rounded-xl object-contain" />
-      ) : (
+      {/* Le logo téléversé par un administrateur reste prioritaire ; à défaut,
+          on affiche le logo officiel de l'église fourni avec le site. */}
+      {imageFailed ? (
         <LogoMark className="h-10 w-10 transition group-hover:scale-105" />
+      ) : (
+        <img
+          src={logoUrl ?? BRAND_LOGO_MARK}
+          alt=""
+          width={44}
+          height={44}
+          onError={() => setImageFailed(true)}
+          className="h-11 w-11 object-contain transition duration-300 group-hover:scale-105"
+        />
       )}
       <span className="flex flex-col leading-tight">
         <span

@@ -15,6 +15,10 @@
   --color-line: #e7e1f5;
   --color-surface: #ffffff;
   --color-gold: #f2b544;
+  /* Couleurs relevees sur le logo officiel (aigle et flamme). */
+  --color-eagle: #1e73c5;
+  --color-eagle-light: #438bc3;
+  --color-flame: #e0702f;
   --color-success: #15803d;
   --color-warning: #b45309;
   --color-danger: #b91c1c;
@@ -113,6 +117,115 @@
     pointer-events: none;
     opacity: 0.16;
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  }
+}
+
+/* --- Animations de marque ------------------------------------------------ */
+
+@keyframes aurora-drift {
+  0% {
+    transform: translate3d(-4%, -2%, 0) scale(1);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translate3d(5%, 3%, 0) scale(1.12);
+    opacity: 0.8;
+  }
+  100% {
+    transform: translate3d(-3%, 4%, 0) scale(1.04);
+    opacity: 0.6;
+  }
+}
+
+@keyframes float-soft {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes shimmer-sweep {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+@keyframes halo-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.45;
+  }
+  50% {
+    transform: scale(1.18);
+    opacity: 0.15;
+  }
+}
+
+@keyframes ticker-slide {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+@layer components {
+  /* Texte degrade anime : lisible sur fond violet profond. */
+  .text-brand-gradient {
+    background-image: linear-gradient(
+      100deg,
+      #ffffff 0%,
+      #ede9fe 28%,
+      #f2b544 46%,
+      #ede9fe 62%,
+      #ffffff 100%
+    );
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: shimmer-sweep 9s linear infinite;
+  }
+
+  .aurora-blob {
+    position: absolute;
+    border-radius: 9999px;
+    filter: blur(64px);
+    animation: aurora-drift 18s ease-in-out infinite alternate;
+    pointer-events: none;
+  }
+
+  .float-soft {
+    animation: float-soft 7s ease-in-out infinite;
+  }
+
+  .halo {
+    animation: halo-pulse 6s ease-in-out infinite;
+  }
+
+  .glass-dark {
+    background: rgb(255 255 255 / 0.07);
+    border: 1px solid rgb(255 255 255 / 0.14);
+    backdrop-filter: blur(14px);
+  }
+
+  /* Bandeau defilant (horaires, versets) : deux copies pour une boucle continue. */
+  .ticker-track {
+    display: flex;
+    width: max-content;
+    animation: ticker-slide 42s linear infinite;
+  }
+
+  .ticker-track:hover {
+    animation-play-state: paused;
   }
 }
 
