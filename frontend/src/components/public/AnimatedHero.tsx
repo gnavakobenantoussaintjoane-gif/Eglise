@@ -150,14 +150,14 @@ export function AnimatedHero({
 
   return (
     <section ref={sectionRef} className="relative isolate overflow-hidden bg-brand-dark text-white">
-      {/* --- Fond : yeux du lion (visuel des affiches), parallaxe + voile dégradé --- */}
+      {/* --- Fond : regard de l'aigle (visuel des affiches), parallaxe + voile dégradé --- */}
       <motion.div
         aria-hidden="true"
         style={{ y: reduced ? 0 : backgroundY }}
         className="absolute inset-0 -z-10"
       >
         <img
-          src="/brand/hero-lion.jpg"
+          src="/brand/hero-eagle.jpg"
           alt=""
           className="h-full w-full scale-110 object-cover opacity-45"
           loading="eager"
