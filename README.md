@@ -207,10 +207,9 @@ Aucun serveur de base de données n'est nécessaire en développement : **PGlite
 # 1. Dépendances (monorepo : backend + frontend)
 npm install
 
-# 2. Configuration
-cp backend/.env.example backend/.env
-node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"   # → SESSION_SECRET
-# éditer backend/.env : SESSION_SECRET, ADMIN_BOOTSTRAP_*, SEED_DEMO_DATA, SEED_DEMO_PASSWORD
+# 2. Configuration (crée backend/.env + SESSION_SECRET aléatoire, idempotent)
+npm run setup
+# éditer ensuite backend/.env si besoin : ADMIN_BOOTSTRAP_*, SEED_DEMO_DATA, SEED_DEMO_PASSWORD
 
 # 3. Base de données
 npm run db:migrate      # applique supabase/migrations
@@ -238,6 +237,8 @@ Le serveur de développement Vite **proxifie `/api` et `/files`** vers l'API : a
 ## Variables d'environnement
 
 Fichier de référence : [`backend/.env.example`](backend/.env.example). Il est chargé depuis `backend/.env` (les variables déjà définies dans l'environnement ont priorité).
+
+`backend/.env` n'est **pas** versionné (il contient des secrets) : il doit être créé une fois sur chaque machine, avec `npm run setup`. Sans lui, l'API refuse de démarrer avec `Configuration invalide … SESSION_SECRET: Invalid input: expected string, received undefined`.
 
 ### Général
 
@@ -369,6 +370,7 @@ Depuis la racine (ils délèguent au bon workspace) :
 | `npm start` | Démarre l'API compilée |
 | `npm run typecheck` | `tsc --noEmit` sur les deux workspaces |
 | `npm run test` | Suites backend puis frontend |
+| `npm run setup` | Crée `backend/.env` depuis `.env.example` avec un `SESSION_SECRET` aléatoire et les valeurs de développement. Idempotent : ne réécrit jamais une valeur existante (sauf secret absent ou d'exemple) |
 | `npm run doctor` | Diagnostic de l'environnement : Node, dépendances, `.env`, base, API et interface, avec la solution pour chaque point en échec |
 | `npm run db:migrate` | Applique les migrations |
 | `npm run db:seed` | Jeu de démonstration (`-- --force` pour ignorer `SEED_DEMO_DATA`) |

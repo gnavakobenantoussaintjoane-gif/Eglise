@@ -125,7 +125,29 @@ function loadEnv(): AppEnv {
     const details = parsed.error.issues
       .map((issue) => `  - ${issue.path.join('.')}: ${issue.message}`)
       .join('\n');
-    throw new Error(`Configuration invalide. Corrigez backend/.env :\n${details}`);
+    // Le cas le plus frequent est un fichier backend/.env absent (il n'est
+    // jamais versionne, puisqu'il contient des secrets) : on indique la
+    // commande qui le cree, au lieu de laisser l'utilisateur chercher.
+    const manquant = parsed.error.issues.some((issue) => issue.path[0] === 'SESSION_SECRET');
+    const aide = [
+      '',
+      'Que faire ?',
+      '  npm run setup',
+      '      cree backend/.env a partir de backend/.env.example, genere un',
+      '      SESSION_SECRET aleatoire et regle le port de developpement.',
+      '',
+      '  npm run doctor',
+      '      diagnostique l installation point par point (node, dependances,',
+      '      base de donnees, ports).',
+      manquant
+        ? '\n  Si backend/.env existe deja, ajoutez-y une ligne :\n      SESSION_SECRET=<valeur aleatoire de 48 octets minimum>'
+        : '',
+    ]
+      .filter((line) => line !== '')
+      .join('\n');
+    throw new Error(
+      `Configuration invalide (${path.relative(repoRoot, path.join(backendRoot, '.env')) || 'backend/.env'}).\n${details}\n${aide}`,
+    );
   }
   return parsed.data;
 }

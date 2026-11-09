@@ -78,7 +78,7 @@ check(
   'backend/.env',
   hasEnv,
   hasEnv ? 'fichier de configuration present' : 'fichier absent : l\'API refusera de demarrer',
-  'Copiez backend/.env.example vers backend/.env, puis renseignez SESSION_SECRET.',
+  'Lancez « npm run setup » a la racine : le fichier est cree avec un SESSION_SECRET aleatoire.',
 );
 
 if (hasEnv) {
@@ -88,7 +88,7 @@ if (hasEnv) {
     'SESSION_SECRET',
     secret.length >= 32 && !/change_me|example|placeholder/i.test(secret),
     secret.length >= 32 ? `defini (${secret.length} caracteres)` : 'absent, trop court ou valeur d\'exemple',
-    'Generez-en un : node -e "console.log(require(\'crypto\').randomBytes(48).toString(\'base64url\'))"',
+    'Lancez « npm run setup » : la valeur manquante ou d\'exemple est remplacee automatiquement.',
   );
 }
 
