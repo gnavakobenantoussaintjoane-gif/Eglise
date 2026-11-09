@@ -87,6 +87,39 @@ Le mot de passe est demandé à l'invite **masquée**. Il n'est jamais accepté 
 argument de commande (il resterait dans l'historique du shell). Voir
 [`INITIALISATION_ADMIN.md`](INITIALISATION_ADMIN.md).
 
+## 5 bis. Créer un compte de démonstration (facultatif)
+
+Pour essayer l'application avec un compte ordinaire, modifiable à volonté :
+
+```bash
+npm run demo:account
+```
+
+Résultat affiché :
+
+```
+  E-mail       : demo@laforteresse.local
+  Mot de passe : N0anXQU6E77la1!   (généré, affiché une seule fois)
+  Rôle         : member (Membre)
+  Statut       : approuvé — connexion immédiate
+```
+
+| Besoin | Commande |
+|---|---|
+| Un compte média | `npm run demo:account -- --role media` |
+| Une autre adresse | `npm run demo:account -- --email essai@exemple.ci` |
+| Changer le rôle / le mot de passe plus tard | `npm run demo:account -- --email … --role … --reset` |
+| Imposer le mot de passe (CI) | `DEMO_ACCOUNT_PASSWORD=… npm run demo:account` |
+
+Le compte se modifie ensuite **dans l'application**, sans relancer de commande :
+
+- son titulaire change nom, ville, téléphone et photo dans **Espace membre → Mon profil** ;
+- un administrateur change son **rôle**, son **statut** ou ses **restrictions** dans **Administration → Membres** ;
+- le mot de passe se change via « Mot de passe oublié » sur la page de connexion.
+
+La commande ne crée jamais de doublon, ne rétrograde jamais un compte
+administrateur, et refuse de s'exécuter si `NODE_ENV=production` (sauf `--force`).
+
 ## 6. Lancer
 
 ```bash

@@ -377,6 +377,7 @@ Depuis la racine (ils délèguent au bon workspace) :
 | `npm run db:reset` | Réinitialise la base |
 | `npm run init-super-admin` | **Compte principal (pasteur)** : mot de passe saisi à l'invite masquée, rôle `admin` + statut approuvé, aucun doublon. Voir [`docs/INITIALISATION_ADMIN.md`](docs/INITIALISATION_ADMIN.md) |
 | `npm run create-admin` | Ajoute un administrateur (mot de passe demandé à l'invite) |
+| `npm run demo:account` | Crée un **compte de démonstration** approuvé (`demo@laforteresse.local`, rôle `member` par défaut), mot de passe généré et affiché une fois. `--role`, `--email`, `--reset` pour l'adapter ; le compte reste modifiable ensuite |
 
 Côté `frontend` : `npm run dev --workspace frontend`, `npm run build --workspace frontend`, `npm run test --workspace frontend`.
 
@@ -400,6 +401,19 @@ Créés par `npm run db:seed` avec `SEED_DEMO_DATA=true` et le mot de passe déf
 L'administrateur n'est **jamais** créé par le seed. Pour le compte principal (pasteur), utilisez `npm run init-super-admin -- --email <adresse>` : le mot de passe est saisi à l'invite masquée, aucun doublon n'est créé, et le compte reçoit le rôle `admin` avec le statut approuvé. La commande `npm run create-admin -- <email>` reste disponible pour un administrateur supplémentaire ; elle lit `ADMIN_BOOTSTRAP_PASSWORD` si la variable est définie, sinon elle demande le mot de passe à l'invite. Dans les deux cas, le mot de passe doit contenir **au moins 10 caractères, une lettre et un chiffre**, et **n'est jamais accepté en argument de commande**.
 
 Le jeu de démonstration comprend aussi 10 départements, 3 prédications, 3 événements avec inscriptions, 4 albums (15 photos) et des annonces, témoignages et demandes de prière.
+
+### Un compte de test à vous, modifiable
+
+Pour disposer d'un compte personnel de bac à sable — sans dépendre du seed et sans toucher au compte principal :
+
+```bash
+npm run demo:account                                # demo@laforteresse.local, rôle member
+npm run demo:account -- --role media                # autre rôle
+npm run demo:account -- --email essai@exemple.ci    # autre adresse
+npm run demo:account -- --reset                     # applique un changement (rôle, mot de passe)
+```
+
+Le mot de passe est généré et affiché **une seule fois** ; pour en imposer un, définissez `DEMO_ACCOUNT_PASSWORD` dans l'environnement (jamais en argument de commande). Le compte est approuvé immédiatement et se modifie ensuite comme n'importe quel membre : profil par son titulaire, rôle / statut / restrictions par un administrateur. La commande refuse de rétrograder un compte administrateur existant et s'arrête si `NODE_ENV=production` (sauf `--force`).
 
 ---
 
