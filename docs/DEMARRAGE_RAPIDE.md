@@ -28,6 +28,26 @@ les dépendances croisées.
 
 ## 3. Configuration de l'API
 
+### La méthode rapide (recommandée)
+
+```bash
+npm run setup
+```
+
+Cette commande crée `backend/.env` à partir de `backend/.env.example`, y écrit
+un `SESSION_SECRET` aléatoire (48 octets) et règle les valeurs de
+développement (`PORT=4000`, `FRONTEND_URL=http://localhost:3000`).
+
+Elle est **sans danger à relancer** : si `backend/.env` existe déjà, elle ne
+touche à aucune de vos valeurs, sauf si `SESSION_SECRET` est absent ou resté à
+la valeur d'exemple.
+
+> **PowerShell** : la commande est identique. N'utilisez pas `cp` (alias de
+> `Copy-Item`, mais la syntaxe varie selon la version) : `npm run setup` est
+> portable et fonctionne aussi sous Windows.
+
+### La méthode manuelle
+
 ```bash
 cp backend/.env.example backend/.env
 node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"  # → SESSION_SECRET
@@ -149,7 +169,36 @@ lancez simplement `npm run dev` dans un second terminal.
 Depuis la version actuelle, Vite n'affiche plus cette erreur des dizaines de
 fois : un message unique et lisible la remplace, avec la marche à suivre.
 
-## 9. Problèmes courants
+## 9. « Configuration invalide … SESSION_SECRET: expected string, received undefined »
+
+Message complet :
+
+```
+Error: Configuration invalide. Corrigez backend/.env :
+  - SESSION_SECRET: Invalid input: expected string, received undefined
+```
+
+**Cause** : `backend/.env` n'existe pas (ou existe sans `SESSION_SECRET`).
+Ce n'est pas un bug : ce fichier contient vos secrets, donc il n'est **pas**
+versionné sur GitHub. Il doit être créé une fois sur chaque machine.
+
+**Solution** :
+
+```powershell
+npm run setup
+```
+
+Puis relancez la commande qui a échoué, par exemple :
+
+```powershell
+npm run init-super-admin -- --email joannegnava@gmail.com
+```
+
+Le message d'erreur de l'API indique désormais cette marche à suivre ; si vous
+préférez comprendre l'état de votre installation, `npm run doctor` détaille
+chaque point de contrôle.
+
+## 10. Problèmes courants
 
 | Symptôme | Cause | Solution |
 |---|---|---|
