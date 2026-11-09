@@ -14,6 +14,7 @@
     "dev": "concurrently -n api,web -c magenta,cyan \"npm:dev:backend\" \"npm:dev:frontend\"",
     "dev:backend": "npm run dev --workspace backend",
     "dev:frontend": "npm run dev --workspace frontend",
+    "doctor": "node scripts/doctor.mjs",
     "build": "npm run build --workspace backend && npm run build --workspace frontend",
     "start": "npm run start --workspace backend",
     "typecheck": "npm run typecheck --workspace backend && npm run typecheck --workspace frontend",
