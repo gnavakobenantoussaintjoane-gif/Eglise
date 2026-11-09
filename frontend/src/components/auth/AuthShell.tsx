@@ -22,9 +22,10 @@ export function AuthShell({
   return (
     <div className="grid min-h-screen lg:grid-cols-[1fr_1.05fr]">
       <div className="relative hidden overflow-hidden bg-brand-dark p-12 text-white lg:flex lg:flex-col lg:justify-between">
-        {/* Visuel des affiches de l'église, adouci pour rester lisible */}
+        {/* Regard de l'aigle, repris de l'affiche de l'église, adouci pour
+            rester lisible sous le texte. */}
         <img
-          src="/brand/hero-lion.jpg"
+          src="/brand/hero-eagle.jpg"
           alt=""
           aria-hidden="true"
           className="absolute inset-0 h-full w-full scale-110 object-cover opacity-40"

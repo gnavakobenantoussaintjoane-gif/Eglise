@@ -54,7 +54,7 @@ npm run dev                            # site :3000 · API :4000 (proxifiée)
 ## Aperçu
 
 Le site public reprend l'identité visuelle de l'église : logo officiel, regard
-du lion de l'affiche en fond, violet et or, signature « Le Réveil par l'amour du
+du regard de l'aigle de l'affiche en fond, violet et or, signature « Le Réveil par l'amour du
 Christ ». L'accueil est animé (parallaxe, halos, compteurs alimentés par l'API,
 bandeau d'horaires défilant, apparition des sections au défilement) et respecte
 le réglage système « réduire les animations ».

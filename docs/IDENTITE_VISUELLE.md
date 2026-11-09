@@ -12,7 +12,7 @@ ont été extraits pour rester légers et utilisables par le site.
 | `frontend/public/brand/logo-mark.png` | monogramme « F » + aigle + flamme, détouré | favicon, en-tête, médaillon du hero, espace membre, administration |
 | `frontend/public/brand/logo.png` | monogramme + « FORTERESSE DE L'ÉTERNEL » + signature | bloc « Notre identité » de l'accueil |
 | `frontend/public/brand/apple-touch-icon.png` | monogramme sur fond transparent | icône sur écran d'accueil mobile |
-| `frontend/public/brand/hero-lion.jpg` | regard du lion de l'affiche, recadré, adouci et teinté violet | fond animé du hero et de l'écran de connexion |
+| `frontend/public/brand/hero-eagle.jpg` | regard de l'aigle de l'affiche, recadré, adouci et teinté violet | fond animé du hero et de l'écran de connexion |
 
 Les fichiers sont dans `frontend/public/` : ils sont servis à la racine du site
 (`/brand/...`) et copiés tels quels dans `dist/` au build.
@@ -34,7 +34,7 @@ Relevées sur le monogramme et la flamme, elles complètent la palette existante
 | `--color-brand` | `#4c1d95` | violet du monogramme |
 | `--color-brand-royal` | `#6d28d9` | dégradé du monogramme |
 | `--color-gold` | `#f2b544` | « CHRIST » de l'affiche |
-| `--color-eagle` | `#1e73c5` | bleu de l'aigle |
+| `--color-eagle` | `#1e73c5` | bleu de l'aigle (emblème du logo) |
 | `--color-flame` | `#e0702f` | orange de la flamme |
 
 ## 3. Textes institutionnels intégrés
@@ -49,7 +49,7 @@ Relevées sur le monogramme et la flamme, elles complètent la palette existante
 
 | Animation | Fichier | Détail |
 |---|---|---|
-| Fond en parallaxe | `AnimatedHero.tsx` | le regard du lion se déplace moins vite que le texte au défilement |
+| Fond en parallaxe | `AnimatedHero.tsx` | le regard de l'aigle se déplace moins vite que le texte au défilement |
 | Halos colorés | `.aurora-blob` (CSS) | trois halos violets/bleus/dorés dérivent lentement |
 | Logo flottant | `.float-soft` + `.halo` | léger mouvement vertical, auréole pulsée |
 | Compteurs | `useCountUp` | les chiffres (départements, prédications, rendez-vous) montent jusqu'à la **valeur réelle** de l'API |
