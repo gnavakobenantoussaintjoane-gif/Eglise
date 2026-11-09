@@ -1,7 +1,7 @@
 # La Forteresse de l'Éternel
 
 [![CI](https://github.com/gnavakobenantoussaintjoane-gif/Eglise/actions/workflows/ci.yml/badge.svg)](https://github.com/gnavakobenantoussaintjoane-gif/Eglise/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-79%20%2844%20API%20%2B%2035%20interface%29-brightgreen)](https://github.com/gnavakobenantoussaintjoane-gif/Eglise/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-84%20%2844%20API%20%2B%2040%20interface%29-brightgreen)](https://github.com/gnavakobenantoussaintjoane-gif/Eglise/actions/workflows/ci.yml)
 [![Licence](https://img.shields.io/badge/licence-MIT-blue)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A522-339933)](.nvmrc)
 
@@ -28,6 +28,7 @@ npm run dev                            # site :3000 · API :4000 (proxifiée)
 
 ## Sommaire
 
+- [Aperçu](#aperçu)
 - [Fonctionnalités](#fonctionnalités)
 - [Stack technique](#stack-technique)
 - [Structure du dépôt](#structure-du-dépôt)
@@ -47,6 +48,18 @@ npm run dev                            # site :3000 · API :4000 (proxifiée)
 - [Déploiement](#déploiement)
 - [Dépannage](#dépannage)
 - [Licence](#licence)
+
+---
+
+## Aperçu
+
+Le site public reprend l'identité visuelle de l'église : logo officiel, regard
+du lion de l'affiche en fond, violet et or, signature « Le Réveil par l'amour du
+Christ ». L'accueil est animé (parallaxe, halos, compteurs alimentés par l'API,
+bandeau d'horaires défilant, apparition des sections au défilement) et respecte
+le réglage système « réduire les animations ».
+
+Fichiers, couleurs, textes et animations : [`docs/IDENTITE_VISUELLE.md`](docs/IDENTITE_VISUELLE.md).
 
 ---
 

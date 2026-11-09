@@ -1,16 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import {
-  ArrowRight,
-  CalendarDays,
-  Clock,
-  HandHeart,
-  HeartHandshake,
-  MapPin,
-  Quote,
-  Sparkles,
-  Users,
-} from 'lucide-react';
+import { CalendarDays, HandHeart, MapPin } from 'lucide-react';
 import { api } from '../../services/api';
 import { useChurchSettings } from '../../hooks/useChurchSettings';
 import type { Album, Announcement, ChurchEvent, Department, Pagination, Sermon, Testimony } from '../../types';
@@ -22,6 +12,9 @@ import {
   SermonCard,
   TestimonyCard,
 } from '../../components/public/Cards';
+import { AnimatedHero } from '../../components/public/AnimatedHero';
+import { VisionSignature } from '../../components/public/VisionSignature';
+import { Reveal } from '../../components/public/Reveal';
 import { formatDate } from '../../utils/format';
 
 type Collection<T, K extends string> = { [P in K]: T[] } & { pagination: Pagination };
@@ -70,7 +63,6 @@ export function HomePage() {
   const albums = albumsQuery.data?.albums ?? [];
   const announcements = announcementsQuery.data?.announcements ?? [];
   const testimonies = testimoniesQuery.data?.testimonies ?? [];
-  const nextEvent = events[0];
   const serviceTimes = settings.serviceTimes.length > 0
     ? settings.serviceTimes
     : [
@@ -79,100 +71,24 @@ export function HomePage() {
         { label: 'Veillée de prière', day: 'Vendredi', time: '21h00' },
       ];
 
+  const heroUrl = settings.heroUrl;
+
   return (
     <>
-      {/* HERO */}
-      <section className="relative isolate overflow-hidden hero-gradient text-white">
-        {settings.heroUrl ? (
-          <img src={settings.heroUrl} alt="" className="absolute inset-0 h-full w-full object-cover opacity-20" />
-        ) : null}
-        <div className="absolute -top-24 -right-16 h-80 w-80 rounded-full bg-white/10 blur-3xl" aria-hidden="true" />
-        <div className="absolute -bottom-32 -left-24 h-96 w-96 rounded-full bg-brand-light/30 blur-3xl" aria-hidden="true" />
-
-        <div className="container-page relative grid gap-12 py-16 sm:py-20 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:py-28">
-          <div className="space-y-7">
-            <span className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4 py-1.5 text-xs font-medium tracking-wide uppercase">
-              <Sparkles className="h-3.5 w-3.5" aria-hidden="true" /> Bienvenue à la maison
-            </span>
-            <div className="space-y-4">
-              <h1 className="text-balance font-display text-4xl leading-[1.05] font-semibold sm:text-5xl lg:text-6xl">
-                {settings.slogan}
-              </h1>
-              <p className="max-w-xl text-base leading-relaxed text-white/80 sm:text-lg">
-                {settings.tagline ??
-                  'Une église évangélique à Abidjan où chacun est accueilli, formé et envoyé pour vivre pleinement sa foi.'}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <Link to="/a-propos">
-                <Button size="lg" variant="gold" icon={<ArrowRight className="h-4 w-4" aria-hidden="true" />}>
-                  Découvrir l’église
-                </Button>
-              </Link>
-              <Link to="/predications">
-                <Button size="lg" variant="outline" className="border-white/30 bg-white/5 text-white hover:bg-white/15">
-                  Voir les prédications
-                </Button>
-              </Link>
-            </div>
-            <dl className="grid gap-4 pt-4 sm:grid-cols-3">
-              {[
-                { label: 'Départements actifs', value: departments.length || '10', icon: Users },
-                { label: 'Cultes par semaine', value: serviceTimes.length || '3', icon: Clock },
-                { label: 'Prédications en ligne', value: sermons.length || '3', icon: HeartHandshake },
-              ].map(({ label, value, icon: Icon }) => (
-                <div key={label} className="rounded-2xl border border-white/15 bg-white/5 px-4 py-3">
-                  <Icon className="mb-2 h-4 w-4 text-gold" aria-hidden="true" />
-                  <dt className="text-[0.7rem] tracking-wide text-white/60 uppercase">{label}</dt>
-                  <dd className="font-display text-xl font-semibold text-white">{value}</dd>
-                </div>
-              ))}
-            </dl>
-          </div>
-
-          <div className="relative">
-            <div className="rounded-3xl border border-white/15 bg-white/10 p-6 backdrop-blur-sm">
-              <p className="eyebrow text-gold">Prochain rendez-vous</p>
-              {nextEvent ? (
-                <div className="mt-3 space-y-3">
-                  <h2 className="font-display text-2xl font-semibold text-white">{nextEvent.title}</h2>
-                  <p className="text-sm text-white/75">{formatDate(nextEvent.startsAt)} · {nextEvent.location ?? 'Voir détails'}</p>
-                  {nextEvent.description ? (
-                    <p className="line-clamp-3 text-sm leading-relaxed text-white/70">{nextEvent.description}</p>
-                  ) : null}
-                  <Link to={`/evenements/${nextEvent.slug}`} className="inline-flex items-center gap-1.5 text-sm font-semibold text-gold hover:text-white">
-                    Détails de l’événement <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  </Link>
-                </div>
-              ) : (
-                <p className="mt-3 text-sm text-white/75">
-                  Rejoignez-nous ce dimanche pour le culte de célébration.
-                </p>
-              )}
-            </div>
-
-            <div className="mt-4 grid gap-3 rounded-3xl border border-white/15 bg-white/95 p-5 text-ink shadow-xl">
-              <p className="text-xs font-semibold tracking-[0.18em] text-brand uppercase">Horaires des cultes</p>
-              <ul className="space-y-2 text-sm">
-                {serviceTimes.slice(0, 3).map((service, index) => (
-                  <li key={`${service.label}-${index}`} className="flex items-center justify-between gap-2">
-                    <span className="font-medium text-brand-dark">{service.label ?? 'Culte'}</span>
-                    <span className="text-xs text-muted">
-                      {[service.day, service.time].filter(Boolean).join(' · ')}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <Link to="/contact" className="text-xs font-semibold text-brand-royal hover:text-brand">
-                Voir le plan d’accès →
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* HERO — animé, alimenté par les réglages et par l'agenda réel */}
+      <AnimatedHero
+        settings={{ ...settings, heroUrl }}
+        departments={departments}
+        sermons={sermons}
+        events={events}
+      />
 
       {/* BANDEAU DE CONFIANCE */}
-      <section aria-label="Repères de l’église" className="border-b border-line bg-lavender/50">
+      <Reveal
+        as="section"
+        aria-label="Repères de l’église"
+        className="border-b border-line bg-lavender/50"
+      >
         <div className="container-page grid gap-6 py-8 sm:grid-cols-3">
           {[
             { icon: MapPin, title: 'Nous trouver', text: [settings.address, settings.city].filter(Boolean).join(', ') || 'Abidjan, Côte d’Ivoire' },
@@ -190,60 +106,14 @@ export function HomePage() {
             </div>
           ))}
         </div>
-      </section>
+      </Reveal>
 
-      {/* VISION */}
-      <section className="container-page py-16 sm:py-20">
-        <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
-          <div className="space-y-4">
-            <p className="eyebrow">Notre maison</p>
-            <h2 className="text-3xl font-semibold text-brand-dark sm:text-4xl">
-              {settings.churchName}
-            </h2>
-            <p className="text-base leading-relaxed text-muted">
-              {settings.about ??
-                'Née d’un petit groupe de prière, La Forteresse de l’Éternel est une famille spirituelle qui croit à la puissance de la Parole de Dieu et à la transformation des vies par l’Évangile.'}
-            </p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {[
-                { title: 'Notre vision', text: settings.vision ?? 'Former des disciples affermis dans la Parole.', icon: Sparkles },
-                { title: 'Notre mission', text: settings.mission ?? 'Accueillir, former et envoyer.', icon: HeartHandshake },
-              ].map(({ title, text, icon: Icon }) => (
-                <div key={title} className="surface-muted p-4">
-                  <Icon className="mb-2 h-5 w-5 text-brand-royal" aria-hidden="true" />
-                  <p className="text-sm font-semibold text-brand-dark">{title}</p>
-                  <p className="mt-1 text-sm leading-relaxed text-muted">{text}</p>
-                </div>
-              ))}
-            </div>
-            <Link to="/a-propos">
-              <Button variant="outline">En savoir plus sur nous</Button>
-            </Link>
-          </div>
-
-          <div className="relative">
-            <div className="overflow-hidden rounded-3xl bg-gradient-to-br from-brand-royal via-brand to-brand-dark p-8 text-white">
-              <Quote className="h-8 w-8 text-gold" aria-hidden="true" />
-              <blockquote className="mt-4 font-display text-2xl leading-snug">
-                « Dieu est pour nous un refuge et un appui, un secours qui ne manque jamais dans la détresse. »
-              </blockquote>
-              <p className="mt-3 text-sm text-white/70">Psaume 46.1</p>
-              <div className="mt-8 grid gap-3 sm:grid-cols-2">
-                <Link to="/inscription" className="rounded-2xl bg-white/10 px-4 py-3 text-sm font-medium transition hover:bg-white/20">
-                  Devenir membre
-                </Link>
-                <Link to="/departements" className="rounded-2xl bg-white/10 px-4 py-3 text-sm font-medium transition hover:bg-white/20">
-                  Rejoindre un département
-                </Link>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* IDENTITÉ — vision, mission, signature et verset (animés au défilement) */}
+      <VisionSignature settings={settings} />
 
       {/* ÉVÉNEMENTS */}
       {events.length > 0 ? (
-        <section className="bg-lavender/50 py-16 sm:py-20">
+        <Reveal as="section" className="bg-lavender/50 py-16 sm:py-20">
           <div className="container-page space-y-8">
             <SectionHeading
               eyebrow="Agenda"
@@ -257,12 +127,12 @@ export function HomePage() {
               ))}
             </div>
           </div>
-        </section>
+        </Reveal>
       ) : null}
 
       {/* PREDICATIONS */}
       {sermons.length > 0 ? (
-        <section className="container-page py-16 sm:py-20">
+        <Reveal as="section" className="container-page py-16 sm:py-20">
           <div className="space-y-8">
             <SectionHeading
               eyebrow="La Parole"
@@ -276,12 +146,14 @@ export function HomePage() {
               ))}
             </div>
           </div>
-        </section>
+        </Reveal>
       ) : null}
 
       {/* DÉPARTEMENTS */}
       {departments.length > 0 ? (
-        <section className="bg-brand-dark py-16 text-white sm:py-20">
+        <Reveal as="section" className="relative isolate overflow-hidden bg-brand-dark py-16 text-white sm:py-20">
+          <div className="aurora-blob top-[-20%] left-[-10%] h-72 w-72 bg-brand-royal/40" aria-hidden="true" />
+          <div className="aurora-blob right-[-10%] bottom-[-25%] h-80 w-80 bg-eagle/25 [animation-delay:-8s]" aria-hidden="true" />
           <div className="container-page space-y-8">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div className="max-w-2xl space-y-2">
@@ -297,18 +169,18 @@ export function HomePage() {
             </div>
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {departments.slice(0, 6).map((department) => (
-                <div key={department.id} className="text-ink">
+                <div key={department.id} className="text-ink transition duration-300 hover:-translate-y-1">
                   <DepartmentCard department={department} />
                 </div>
               ))}
             </div>
           </div>
-        </section>
+        </Reveal>
       ) : null}
 
       {/* GALERIE */}
       {albums.length > 0 ? (
-        <section className="container-page py-16 sm:py-20">
+        <Reveal as="section" className="container-page py-16 sm:py-20">
           <div className="space-y-8">
             <SectionHeading
               eyebrow="Souvenirs"
@@ -322,11 +194,11 @@ export function HomePage() {
               ))}
             </div>
           </div>
-        </section>
+        </Reveal>
       ) : null}
 
       {/* ANNONCES + TEMOIGNAGES */}
-      <section className="bg-lavender/50 py-16 sm:py-20">
+      <Reveal as="section" className="bg-lavender/50 py-16 sm:py-20">
         <div className="container-page grid gap-10 lg:grid-cols-[0.9fr_1.1fr]">
           <div className="space-y-6">
             <SectionHeading eyebrow="À retenir" title="Annonces" description="Les informations pratiques de la semaine." />
@@ -367,11 +239,13 @@ export function HomePage() {
             )}
           </div>
         </div>
-      </section>
+      </Reveal>
 
       {/* CTA */}
-      <section className="container-page py-16 sm:py-20">
-        <div className="overflow-hidden rounded-3xl bg-gradient-to-br from-brand via-brand-royal to-brand-dark px-6 py-12 text-center text-white sm:px-12">
+      <Reveal as="section" className="container-page py-16 sm:py-20">
+        <div className="relative isolate overflow-hidden rounded-3xl bg-gradient-to-br from-brand via-brand-royal to-brand-dark px-6 py-12 text-center text-white sm:px-12">
+          <div className="aurora-blob top-[-30%] left-1/4 h-64 w-64 bg-gold/20" aria-hidden="true" />
+          <div className="aurora-blob right-1/4 bottom-[-40%] h-64 w-64 bg-eagle/30 [animation-delay:-9s]" aria-hidden="true" />
           <p className="eyebrow text-gold">Prochaine étape</p>
           <h2 className="mx-auto mt-3 max-w-2xl text-3xl font-semibold sm:text-4xl">
             Vous êtes attendu, quel que soit votre parcours
@@ -392,7 +266,7 @@ export function HomePage() {
             </Link>
           </div>
         </div>
-      </section>
+      </Reveal>
     </>
   );
 }
