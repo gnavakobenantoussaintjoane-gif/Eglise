@@ -15,6 +15,7 @@ cp backend/.env.example backend/.env   # renseigner SESSION_SECRET
 npm run db:migrate && npm run db:seed
 npm run init-super-admin -- --email vous@exemple.ci   # compte principal (mot de passe saisi masqué)
 npm run dev                            # site :3000 · API :4000 (proxifiée)
+npm run doctor                         # vérifie Node, dépendances, base, API et interface
 ```
 
 > **Première ouverture dans un éditeur ?** Guide détaillé, y compris les
@@ -368,6 +369,7 @@ Depuis la racine (ils délèguent au bon workspace) :
 | `npm start` | Démarre l'API compilée |
 | `npm run typecheck` | `tsc --noEmit` sur les deux workspaces |
 | `npm run test` | Suites backend puis frontend |
+| `npm run doctor` | Diagnostic de l'environnement : Node, dépendances, `.env`, base, API et interface, avec la solution pour chaque point en échec |
 | `npm run db:migrate` | Applique les migrations |
 | `npm run db:seed` | Jeu de démonstration (`-- --force` pour ignorer `SEED_DEMO_DATA`) |
 | `npm run db:reset` | Réinitialise la base |
