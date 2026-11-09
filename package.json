@@ -25,7 +25,8 @@
     "db:seed": "npm run db:seed --workspace backend --",
     "db:reset": "npm run db:reset --workspace backend --",
     "create-admin": "npm run create-admin --workspace backend --",
-    "init-super-admin": "npm run init-super-admin --workspace backend --"
+    "init-super-admin": "npm run init-super-admin --workspace backend --",
+    "demo:account": "npm run demo:account --workspace backend --"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

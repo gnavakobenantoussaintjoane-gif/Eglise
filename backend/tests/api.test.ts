@@ -939,6 +939,145 @@ describe('API - messagerie', () => {
  * Le mot de passe n'est jamais fourni par l'environnement : ces tests appellent
  * la logique du script avec un mot de passe de test, sur la base isolee.
  */
+describe('Compte de démonstration', () => {
+  const DEMO = {
+    email: 'Demo.Compte@test.local',
+    password: 'CompteDemo2026!',
+    firstName: 'Compte',
+    lastName: 'Démo',
+  };
+
+  /** Acces direct au module : le script CLI n'est qu'un habillage. */
+  async function createAccount(options: {
+    email?: string;
+    password?: string;
+    role?: 'member' | 'department_leader' | 'media' | 'admin';
+    reset?: boolean;
+  }) {
+    const { createDemoAccount } = await import('../src/auth/demo-account.js');
+    const { getDatabase } = await import('../src/db/client.js');
+    return createDemoAccount(getDatabase(), {
+      email: options.email ?? DEMO.email,
+      password: options.password ?? DEMO.password,
+      firstName: DEMO.firstName,
+      lastName: DEMO.lastName,
+      role: options.role,
+      reset: options.reset,
+    });
+  }
+
+  async function fetchProfile(email: string) {
+    const { getDatabase } = await import('../src/db/client.js');
+    const { rows } = await getDatabase().query<{ id: string; role: string; status: string }>(
+      'select id, role, status from public.profiles where lower(email) = $1',
+      [email.toLowerCase()],
+    );
+    return rows[0];
+  }
+
+  it('cree un compte approuve et permet de se connecter immediatement', async () => {
+    const result = await createAccount({});
+    expect(result.action).toBe('created');
+    expect(result.role).toBe('member');
+
+    const profile = await fetchProfile(DEMO.email);
+    expect(profile?.status).toBe('approved');
+    expect(profile?.role).toBe('member');
+
+    await request(app)
+      .post(`${API}/auth/login`)
+      .send({ email: DEMO.email, password: DEMO.password })
+      .expect(200);
+  }, 30_000);
+
+  it('ne cree pas de doublon quand il est relance', async () => {
+    const premier = await fetchProfile(DEMO.email);
+    const result = await createAccount({});
+    expect(result.action).toBe('unchanged');
+    expect(result.profileId).toBe(premier?.id);
+
+    const { getDatabase } = await import('../src/db/client.js');
+    const { rows } = await getDatabase().query<{ total: string }>(
+      'select count(*)::text as total from public.profiles where lower(email) = $1',
+      [DEMO.email.toLowerCase()],
+    );
+    expect(Number(rows[0]?.total)).toBe(1);
+  });
+
+  it('modifie le role et le mot de passe avec reset', async () => {
+    const result = await createAccount({ role: 'media', password: 'NouveauDemo2026!', reset: true });
+    expect(result.action).toBe('updated');
+    // Le type est une union : on verifie explicitement avant de lire `changes`.
+    if (result.action !== 'updated') throw new Error('mise a jour attendue');
+    expect(result.role).toBe('media');
+    expect(result.changes.join(' ')).toContain('member → media');
+
+    expect((await fetchProfile(DEMO.email))?.role).toBe('media');
+
+    // L'ancien mot de passe ne fonctionne plus, le nouveau oui.
+    await request(app)
+      .post(`${API}/auth/login`)
+      .send({ email: DEMO.email, password: DEMO.password })
+      .expect(401);
+    await request(app)
+      .post(`${API}/auth/login`)
+      .send({ email: DEMO.email, password: 'NouveauDemo2026!' })
+      .expect(200);
+  }, 30_000);
+
+  it('refuse un role inconnu et un mot de passe trop faible', async () => {
+    await expect(createAccount({ role: 'super_root' as 'admin' })).rejects.toThrow(/[Rr]ôle inconnu/);
+    await expect(createAccount({ email: 'autre@test.local', password: 'court' })).rejects.toThrow(
+      /Mot de passe trop faible/,
+    );
+  });
+
+  it('ne retrograde jamais un compte administrateur existant', async () => {
+    const { getDatabase } = await import('../src/db/client.js');
+    const { rows } = await getDatabase().query<{ id: string; email: string }>(
+      "select id, email from public.profiles where role = 'admin' and status = 'approved' limit 1",
+    );
+    const admin = rows[0];
+    expect(admin).toBeTruthy();
+
+    await expect(
+      createAccount({ email: admin.email, role: 'member', reset: true }),
+    ).rejects.toThrow(/administrateur/);
+
+    const still = await getDatabase().query<{ role: string }>(
+      'select role from public.profiles where id = $1',
+      [admin.id],
+    );
+    expect(still.rows[0]?.role).toBe('admin');
+  });
+
+  it('laisse le compte modifiable ensuite par l administrateur', async () => {
+    const profile = await fetchProfile(DEMO.email);
+    expect(profile).toBeTruthy();
+
+    // Changement de role depuis le back-office, comme pour tout membre.
+    const res = await adminAgent
+      .patch(`${API}/admin/members/${profile?.id}/role`)
+      .send({ role: 'member' })
+      .expect(200);
+    expect(res.body.role).toBe('member');
+
+    // Et restriction ciblee possible : la fiche se comporte comme les autres.
+    await adminAgent
+      .put(`${API}/admin/members/${profile?.id}/restrictions`)
+      .send({ codes: ['gallery_access'], reason: 'Test de restriction sur compte de démonstration.' })
+      .expect(200);
+
+    const detail = await adminAgent.get(`${API}/admin/members/${profile?.id}`).expect(200);
+    expect(detail.body.restrictions).toHaveLength(1);
+
+    await adminAgent
+      .put(`${API}/admin/members/${profile?.id}/restrictions`)
+      .send({ codes: [] })
+      .expect(200);
+  });
+});
+
 describe('Initialisation du compte principal', () => {
   const PASTOR = {
     email: 'Pasteur.Principal@test.local',
