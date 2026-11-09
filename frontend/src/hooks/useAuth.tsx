@@ -7,7 +7,7 @@ import {
 } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
-import type { Permissions, Profile, Session } from '../types';
+import type { MemberRestriction, Permissions, Profile, Session } from '../types';
 
 interface LoginInput {
   email: string;
@@ -33,6 +33,8 @@ interface AuthContextValue {
   isAdmin: boolean;
   isMedia: boolean;
   canManageDepartments: boolean;
+  /** Restrictions individuelles du membre connecté, avec leur motif. */
+  restrictions: MemberRestriction[];
   login: (input: LoginInput) => Promise<Session>;
   register: (input: RegisterInput) => Promise<Session>;
   logout: () => Promise<void>;
@@ -91,6 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAdmin: Boolean(permissions?.isAdmin),
       isMedia: Boolean(permissions?.isMedia),
       canManageDepartments: Boolean(permissions?.canManageDepartments),
+      restrictions: session?.restrictions ?? [],
       login: (input) => loginMutation.mutateAsync(input),
       register: (input) => registerMutation.mutateAsync(input),
       logout,

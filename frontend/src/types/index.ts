@@ -75,10 +75,27 @@ export interface Profile {
   createdAt?: string;
 }
 
+/** Restriction individuelle appliquee a un membre. */
+export interface MemberRestriction {
+  code: RestrictionCode;
+  label: string;
+  description: string;
+  reason: string | null;
+  createdAt: string;
+}
+
+export type RestrictionCode =
+  | 'event_registration'
+  | 'testimony_submission'
+  | 'gallery_access'
+  | 'directory_listing'
+  | 'department_request';
+
 export interface Session {
   profile: Profile | null;
   permissions: Permissions | null;
   status: MemberStatus | null;
+  restrictions: MemberRestriction[];
 }
 
 export interface DepartmentLeader {
@@ -313,6 +330,8 @@ export interface MemberListItem {
   submittedAt: string | null;
   reviewedAt: string | null;
   createdAt: string;
+  /** Nombre de restrictions actives (0 si aucune). */
+  restrictionCount: number;
 }
 
 export interface MembershipHistoryEntry {
@@ -332,6 +351,7 @@ export interface MemberDetail extends MemberListItem {
   lastLoginAt?: string | null;
   history: MembershipHistoryEntry[];
   departments: { id: string; name: string; slug?: string; role: string; joinedAt?: string }[];
+  restrictions: { code: RestrictionCode; reason: string | null; createdAt: string }[];
 }
 
 export interface AuditLog {

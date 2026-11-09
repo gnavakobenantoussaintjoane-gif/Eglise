@@ -24,6 +24,7 @@ import {
   Textarea,
 } from '../../components/ui';
 import { AdminHeading, TableShell, Toolbar } from '../../components/admin/AdminKit';
+import { MemberRestrictions } from '../../components/admin/MemberRestrictions';
 import {
   MEMBER_STATUS_LABEL,
   MEMBER_STATUS_TONE,
@@ -182,7 +183,14 @@ export function AdminMembersPage() {
               {member.phone ?? '—'}
             </td>
             <td className="px-4 py-3">
-              <Badge tone={MEMBER_STATUS_TONE[member.status]}>{MEMBER_STATUS_LABEL[member.status]}</Badge>
+              <div className="flex flex-col items-start gap-1">
+                <Badge tone={MEMBER_STATUS_TONE[member.status]}>{MEMBER_STATUS_LABEL[member.status]}</Badge>
+                {member.restrictionCount > 0 ? (
+                  <Badge tone="warning">
+                    {member.restrictionCount} restriction{member.restrictionCount > 1 ? 's' : ''}
+                  </Badge>
+                ) : null}
+              </div>
             </td>
             <td className="px-4 py-3 text-xs text-ink/75">{ROLE_LABEL[member.role]}</td>
             <td className="px-4 py-3 text-xs text-muted">
@@ -369,6 +377,12 @@ function MemberDetailModal({
               </p>
             </div>
           ) : null}
+
+          <MemberRestrictions
+            profileId={detail.id}
+            restrictions={detail.restrictions ?? []}
+            disabled={detail.role === 'admin' || detail.status !== 'approved'}
+          />
 
           <div className="space-y-3 rounded-xl border border-line p-4">
             <h3 className="text-sm font-semibold text-ink">Décision</h3>

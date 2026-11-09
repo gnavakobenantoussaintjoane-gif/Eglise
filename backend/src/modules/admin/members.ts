@@ -52,6 +52,8 @@ export interface MemberListItem {
   submittedAt: string | null;
   reviewedAt: string | null;
   createdAt: string;
+  /** Nombre de restrictions individuelles actives (badge de la liste). */
+  restrictionCount: number;
 }
 
 export async function listMembers(query: z.infer<typeof memberQuerySchema>) {
@@ -93,6 +95,15 @@ export async function listMembers(query: z.infer<typeof memberQuerySchema>) {
     params,
   );
 
+  // Un seul aller-retour pour connaitre le nombre de restrictions de chaque
+  // membre de la page : evite une requete par ligne.
+  const restrictions = await db.query<{ profile_id: string; total: string }>(
+    'select profile_id, count(*)::text as total from public.profile_restrictions group by profile_id',
+  );
+  const restrictionCounts = new Map(
+    restrictions.rows.map((entry) => [entry.profile_id, Number(entry.total)]),
+  );
+
   const members: MemberListItem[] = await Promise.all(
     rows.map(async (row) => ({
       id: row.id,
@@ -109,6 +120,7 @@ export async function listMembers(query: z.infer<typeof memberQuerySchema>) {
       submittedAt: row.submitted_at ? new Date(row.submitted_at).toISOString() : null,
       reviewedAt: row.reviewed_at ? new Date(row.reviewed_at).toISOString() : null,
       createdAt: new Date(row.created_at).toISOString(),
+      restrictionCount: restrictionCounts.get(row.id) ?? 0,
     })),
   );
 
@@ -152,9 +164,20 @@ export async function getMemberDetail(id: string) {
     [id],
   );
 
+  const restrictions = await db.query<{ code: string; reason: string | null; created_at: string }>(
+    `select code, reason, created_at from public.profile_restrictions
+      where profile_id = $1 order by created_at asc`,
+    [id],
+  );
+
   return {
     ...toFullProfile(profile, await signedFileUrl(profile.photoPath, 1800)),
     departmentInterestId: profile.departmentInterestId,
+    restrictions: restrictions.rows.map((entry) => ({
+      code: entry.code,
+      reason: entry.reason,
+      createdAt: entry.created_at,
+    })),
     history: history.rows.map((entry) => ({
       status: entry.status,
       note: entry.note,

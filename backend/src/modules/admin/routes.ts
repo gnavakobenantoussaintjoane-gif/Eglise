@@ -8,7 +8,7 @@ import { uploadLimiter } from '../../middlewares/rateLimit.js';
 import { AppError } from '../../utils/errors.js';
 import { getDatabase } from '../../db/client.js';
 import { isAdmin, isApproved, canManageDepartment, type AuthProfile } from '../../auth/permissions.js';
-import { recordAudit } from '../../middlewares/audit.js';
+import { clientIp, recordAudit } from '../../middlewares/audit.js';
 import { storeUpload, removeStoredFile } from '../../services/files.js';
 import { notifyProfiles } from '../../services/notifications.js';
 import { paginationSchema } from '../../utils/pagination.js';
@@ -41,6 +41,13 @@ import {
   testEmailSchema,
 } from './emails.js';
 import { sendNominationEmail } from '../../services/email/index.js';
+import {
+  RESTRICTION_CODES,
+  RESTRICTION_LABELS,
+  listRestrictions,
+  restrictionsInputSchema,
+  setRestrictions,
+} from '../profiles/restrictions.js';
 import {
   closeNomination,
   openNomination,
@@ -165,6 +172,86 @@ adminRouter.patch(
     const { id } = paramsOf<{ id: string }>(req);
     const input = bodyOf<z.infer<typeof roleChangeSchema>>(req);
     res.json(await changeMemberRole(id, input, authContext(req).profile));
+  }),
+);
+
+/**
+ * Catalogue des restrictions disponibles.
+ *
+ * Expose au frontend pour qu'il n'ait pas a recopier les codes et les
+ * libelles : une seule source de verite, cote serveur.
+ */
+adminRouter.get(
+  '/restrictions/catalog',
+  requireAdmin,
+  asyncHandler(async (_req, res) => {
+    res.json({
+      restrictions: RESTRICTION_CODES.map((code) => ({
+        code,
+        ...RESTRICTION_LABELS[code],
+      })),
+    });
+  }),
+);
+
+/** Restrictions actives d'un membre, avec leur motif. */
+adminRouter.get(
+  '/members/:id/restrictions',
+  requireAdmin,
+  validate({ params: uuidParams }),
+  asyncHandler(async (req, res) => {
+    const { id } = paramsOf<{ id: string }>(req);
+    const db = getDatabase();
+    res.json({ restrictions: await listRestrictions(db, id) });
+  }),
+);
+
+/**
+ * Remplace les restrictions d'un membre.
+ *
+ * `PUT` et non `PATCH` : la liste fournie devient l'etat complet. Une
+ * restriction absente de la liste est levee. L'action est journalisee avec les
+ * codes ajoutes et retires, sans le contenu du motif (donnee personnelle).
+ */
+adminRouter.put(
+  '/members/:id/restrictions',
+  requireAdmin,
+  validate({ params: uuidParams, body: restrictionsInputSchema }),
+  asyncHandler(async (req, res) => {
+    const { id } = paramsOf<{ id: string }>(req);
+    const input = bodyOf<z.infer<typeof restrictionsInputSchema>>(req);
+    const actor = authContext(req).profile;
+    const db = getDatabase();
+
+    const result = await setRestrictions(db, id, input, actor.id);
+
+    await recordAudit(db, {
+      actorId: actor.id,
+      action: 'member.restrictions',
+      entityType: 'profile',
+      entityId: id,
+      metadata: { added: result.added, removed: result.removed, total: result.current.length },
+      ip: clientIp(req.ip),
+    });
+
+    // Le membre est informe : une restriction qui tombe sans explication est
+    // vecue comme une sanction arbitraire.
+    if (result.added.length > 0) {
+      await notifyProfiles(db, [id], {
+        type: 'member.restriction',
+        title: 'Votre accès a été modifié',
+        body:
+          input.reason?.trim() ||
+          `L’administration a retiré ${result.added.length > 1 ? 'certaines possibilités' : 'une possibilité'} à votre compte. Contactez un responsable pour en connaître le motif.`,
+        link: '/espace-membre/profil',
+      });
+    }
+
+    res.json({
+      restrictions: await listRestrictions(db, id),
+      added: result.added,
+      removed: result.removed,
+    });
   }),
 );
 

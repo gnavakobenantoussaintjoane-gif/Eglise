@@ -108,7 +108,7 @@ Réservé aux administrateurs et à l'équipe média : création d'albums, uploa
 | Module | Fonctions |
 |---|---|
 | Tableau de bord | Indicateurs (membres, départements, albums, prédications, événements, finances) |
-| Membres | Liste filtrable, fiche détaillée, approbation / refus / suspension, changement de rôle, historique |
+| Membres | Liste filtrable, fiche détaillée, approbation / refus / suspension, **restrictions ciblées** (voir [docs/RESTRICTIONS.md](docs/RESTRICTIONS.md)), changement de rôle, historique |
 | Départements | CRUD, responsable, membres, demandes d'adhésion, archivage, image |
 | Galerie | Albums, photos, accès restreints, publication |
 | Prédications | CRUD, série, référence biblique, média, publication |
@@ -455,6 +455,12 @@ technique `admin`) est décrite pas à pas dans
 mot de passe saisi à l'invite masquée, jamais en argument.
 
 La correspondance entre rôles fonctionnels (`SUPER_ADMIN_PASTOR`, `DEPARTMENT_HEAD`, `DEPARTMENT_ASSISTANT`, `MEMBER`, `PENDING_MEMBER`) et ce modèle technique, les règles d'auto-élévation interdites et le cycle de vie des nominations sont détaillés dans [`docs/ROLES_ET_PERMISSIONS.md`](docs/ROLES_ET_PERMISSIONS.md).
+
+### Restrictions ciblées
+
+Plutôt que de suspendre un compte (ce qui coupe tout), l'administrateur peut retirer **une possibilité précise** à un membre approuvé : inscription aux événements, publication de témoignages, accès à la galerie, présence dans l'annuaire, demande d'adhésion à un département. Le motif est visible par le membre, chaque changement est journalisé, et un administrateur ne peut jamais être restreint.
+
+Guide complet : [`docs/RESTRICTIONS.md`](docs/RESTRICTIONS.md).
 
 ### Nominations et historique des fonctions
 

@@ -72,10 +72,16 @@ foi. Les libellés affichés aux utilisateurs restent en français
    administrateur actif.
 6. **Membres non approuvés** : l'espace membre répond `403` tant que
    `status != 'approved'`.
+7. **Restrictions ciblées** : un administrateur peut retirer une possibilité
+   précise à un membre (`event_registration`, `testimony_submission`,
+   `gallery_access`, `directory_listing`, `department_request`) sans le
+   suspendre. Un administrateur **ne peut pas** être restreint, personne ne peut
+   se restreindre soi-même, et seuls les comptes approuvés sont concernés
+   (voir [RESTRICTIONS.md](RESTRICTIONS.md)).
 
 Ces règles sont couvertes par des tests automatisés
-(`backend/tests/api.test.ts`, section « permissions sensibles et historique des
-nominations »).
+(`backend/tests/api.test.ts`, sections « permissions sensibles et historique des
+nominations » et « restrictions individuelles »).
 
 ---
 

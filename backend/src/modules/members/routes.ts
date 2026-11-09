@@ -13,6 +13,7 @@ import { notifyDepartmentLeaders, notifyProfiles } from '../../services/notifica
 import { recordAudit } from '../../middlewares/audit.js';
 import { buildSession } from '../../services/profile-view.js';
 import { buildPagination, resolvePagination } from '../../utils/pagination.js';
+import { assertNotRestricted } from '../profiles/restrictions.js';
 
 export const membersRouter = Router();
 
@@ -76,6 +77,7 @@ membersRouter.get(
   asyncHandler(async (req, res) => {
     const query = queryOf<z.infer<typeof albumQuerySchema>>(req);
     const viewer = authContext(req).profile;
+    await assertNotRestricted(getDatabase(), viewer.id, 'gallery_access');
     res.json(await listAlbums(viewer, { ...query, status: undefined }));
   }),
 );
@@ -86,7 +88,9 @@ membersRouter.get(
   validate({ params: slugParams }),
   asyncHandler(async (req, res) => {
     const { slug } = paramsOf<{ slug: string }>(req);
-    res.json(await getAlbum(authContext(req).profile, slug));
+    const viewer = authContext(req).profile;
+    await assertNotRestricted(getDatabase(), viewer.id, 'gallery_access');
+    res.json(await getAlbum(viewer, slug));
   }),
 );
 
@@ -106,6 +110,7 @@ membersRouter.post(
   validate({ params: slugParams, body: registrationInputSchema }),
   asyncHandler(async (req, res) => {
     const { profile } = authContext(req);
+    await assertNotRestricted(getDatabase(), profile.id, 'event_registration');
     const input = bodyOf<z.infer<typeof registrationInputSchema>>(req);
     const { slug } = paramsOf<{ slug: string }>(req);
     const result = await registerForEvent(slug, input, { id: profile.id });
@@ -155,6 +160,7 @@ membersRouter.post(
     const { id } = paramsOf<{ id: string }>(req);
     const { message } = bodyOf<{ message?: string }>(req);
     const db = getDatabase();
+    await assertNotRestricted(db, profile.id, 'department_request');
 
     const department = await db.query<{ id: string; name: string }>(
       'select id, name from public.departments where id = $1 and is_active and archived_at is null',
@@ -339,9 +345,14 @@ membersRouter.get(
       city: string | null;
       profession: string | null;
     }>(
-      `select id, first_name, last_name, city, profession
-       from public.profiles where status = 'approved'
-       order by last_name asc, first_name asc limit 500`,
+      `select p.id, p.first_name, p.last_name, p.city, p.profession
+       from public.profiles p
+       where p.status = 'approved'
+         and not exists (
+           select 1 from public.profile_restrictions r
+           where r.profile_id = p.id and r.code = 'directory_listing'
+         )
+       order by p.last_name asc, p.first_name asc limit 500`,
     );
     // Annuaire volontairement minimal : ni e-mail, ni telephone.
     res.json({
@@ -362,6 +373,7 @@ membersRouter.post(
   validate({ body: testimonyInputSchema }),
   asyncHandler(async (req, res) => {
     const { profile } = authContext(req);
+    await assertNotRestricted(getDatabase(), profile.id, 'testimony_submission');
     const input = bodyOf<z.infer<typeof testimonyInputSchema>>(req);
     const testimony = await createTestimony(input, profile);
     res.status(201).json({
